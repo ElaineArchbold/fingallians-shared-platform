@@ -381,7 +381,7 @@ export default function ParentHome({
     }
   }
 
-  function selectPlayer(playerOrId) {
+  function selectPlayer(playerOrId, options = {}) {
     const player =
       typeof playerOrId === "string"
         ? allLinkedPlayers.find(p => p.id === playerOrId) ||
@@ -400,7 +400,10 @@ export default function ParentHome({
     }
 
     setShowChildSwitcher(false);
-    onChangeParentView("challenge");
+
+    if (!options.stayOnPage) {
+      onChangeParentView("challenge");
+    }
   }
 
   async function removeLinkedChild(player) {
@@ -674,7 +677,7 @@ export default function ParentHome({
                     ? "child-switcher-row active"
                     : "child-switcher-row"
                 }
-                onClick={() => selectPlayer(player)}
+                onClick={() => selectPlayer(player, { stayOnPage: true })}
               >
                 <span>{getPlayerInitials(player.name)}</span>
                 <div>
@@ -742,7 +745,7 @@ export default function ParentHome({
               <button
                 key={player.id}
                 className="squad-card"
-                onClick={() => selectPlayer(player)}
+                onClick={() => selectPlayer(player, { stayOnPage: true })}
               >
                 {player.name}
                 <small>{player.squad_key}</small>
@@ -791,6 +794,7 @@ export default function ParentHome({
         completions={completions}
         termsAcceptedAt={termsAcceptedAt}
         onSwitchChild={() => setShowChildSwitcher(true)}
+        onSelectChild={player => selectPlayer(player, { stayOnPage: true })}
         onChildLinked={linkChild}
         onRemoveChild={removeLinkedChild}
         onSignOut={onSignOut}

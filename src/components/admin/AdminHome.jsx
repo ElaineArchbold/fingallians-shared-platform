@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "../../lib/supabaseClient";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
 

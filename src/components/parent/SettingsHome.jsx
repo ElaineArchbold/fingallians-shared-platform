@@ -40,6 +40,7 @@ export default function SettingsHome({
   badges = [],
   termsAcceptedAt = "",
   onSwitchChild,
+  onSelectChild,
   onChildLinked,
   onRemoveChild,
   onSignOut,
@@ -201,7 +202,7 @@ export default function SettingsHome({
                 >
                   <button
                     type="button"
-                    onClick={() => onSwitchChild?.()}
+                    onClick={() => onSelectChild?.(player)}
                   >
                     <span>{initials(player.name)}</span>
                     <div>
@@ -229,7 +230,7 @@ export default function SettingsHome({
           <div className="settings-add-child">
             <strong>Add another child</strong>
             <p className="muted">
-              Add a child from any squad. Use the chevron beside the child name above to switch quickly.
+              Tap a child below to switch instantly. Add a child from any squad.
             </p>
 
             <label className="label">Squad</label>

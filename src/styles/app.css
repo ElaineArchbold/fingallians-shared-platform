@@ -5703,3 +5703,329 @@ body.is-child-link-mode .app-shell {
     grid-column: 3;
   }
 }
+
+
+/* =====================================================
+   OPTION 1 VISUAL REFRESH
+   Red gradient header/footer + dark player card + gold crest ring
+===================================================== */
+
+:root {
+  --fg-red-1: #d81224;
+  --fg-red-2: #a80d19;
+  --fg-red-3: #700611;
+  --fg-gold: #f7c948;
+  --fg-dark: #111214;
+  --fg-card-dark: #161719;
+}
+
+/* App background */
+body {
+  background:
+    radial-gradient(circle at top left, rgba(247, 201, 72, .16), transparent 30%),
+    linear-gradient(180deg, #fffdf8, #f8efea) !important;
+}
+
+/* Red gradient header */
+.topbar,
+.child-topbar {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .28), transparent 34%),
+    linear-gradient(135deg, var(--fg-red-1), var(--fg-red-2) 58%, var(--fg-red-3)) !important;
+  border: 0 !important;
+  color: white !important;
+  box-shadow: 0 14px 34px rgba(120, 8, 18, .22) !important;
+}
+
+.topbar-title h1,
+.topbar-title p,
+.topbar-brand,
+.topbar .muted {
+  color: white !important;
+}
+
+.topbar-brand img,
+.admin-control-title img,
+.auth-logo-wrap img {
+  background: white;
+  border: 4px solid var(--fg-gold);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, .18);
+}
+
+/* Admin single control bar matches header style */
+.admin-control-bar {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .25), transparent 32%),
+    linear-gradient(135deg, var(--fg-red-1), var(--fg-red-2) 58%, var(--fg-red-3)) !important;
+  border: 0 !important;
+  color: white;
+  box-shadow: 0 14px 34px rgba(120, 8, 18, .22) !important;
+}
+
+.admin-control-title strong,
+.admin-control-title small {
+  color: white !important;
+}
+
+.admin-control-actions .select,
+.admin-squad-select {
+  background: white !important;
+  color: var(--text) !important;
+  border-color: rgba(255,255,255,.45) !important;
+}
+
+.admin-signout-link {
+  color: white !important;
+}
+
+/* Footer nav: red gradient, active gold */
+.bottom-nav {
+  background:
+    linear-gradient(135deg, var(--fg-red-1), var(--fg-red-2) 58%, var(--fg-red-3)) !important;
+  border: 0 !important;
+  box-shadow: 0 -12px 30px rgba(120, 8, 18, .22) !important;
+}
+
+.bottom-nav button {
+  color: rgba(255,255,255,.82) !important;
+  background: transparent !important;
+}
+
+.bottom-nav button span,
+.bottom-nav button small {
+  color: inherit !important;
+}
+
+.bottom-nav button.active {
+  color: var(--fg-gold) !important;
+  background: rgba(255,255,255,.08) !important;
+}
+
+/* Dark player card */
+.player-card,
+.settings-player-card {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .18), transparent 35%),
+    linear-gradient(135deg, #222326, #121315) !important;
+  border: 1px solid rgba(255,255,255,.08) !important;
+  box-shadow: 0 18px 38px rgba(0,0,0,.20) !important;
+  color: white !important;
+}
+
+.player-card h2,
+.player-card p,
+.player-card small,
+.player-card strong,
+.settings-player-card h2,
+.settings-player-card p,
+.settings-player-card small,
+.settings-player-card strong {
+  color: white !important;
+}
+
+.player-card .eyebrow,
+.settings-player-card .eyebrow {
+  color: var(--fg-gold) !important;
+  background: rgba(247, 201, 72, .12) !important;
+  border-color: rgba(247, 201, 72, .35) !important;
+}
+
+/* Logo avatar instead of initials, white circle/gold band */
+.player-avatar,
+.quick-child-avatar,
+.rank-avatar,
+.admin-player-row > span,
+.admin-feed-row > span,
+.child-switcher-row span,
+.settings-linked-child span {
+  background-image: url("/fingallians-crest.png") !important;
+  background-size: 74% !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-color: white !important;
+  border: 4px solid var(--fg-gold) !important;
+  color: transparent !important;
+  box-shadow: 0 7px 16px rgba(0,0,0,.14);
+}
+
+/* XP bar gold on dark card */
+.player-card .player-xp-bar,
+.settings-player-card .player-xp-bar {
+  background: rgba(255,255,255,.18) !important;
+}
+
+.player-card .player-xp-bar div,
+.settings-player-card .player-xp-bar div {
+  background: linear-gradient(90deg, var(--fg-gold), #ffec8a) !important;
+}
+
+/* Child chevron as text weight */
+.child-name-switch {
+  color: inherit !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+}
+
+/* Progress snapshot: clean layout and not squashed */
+.mission-snapshot-card {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .18), transparent 36%),
+    white !important;
+  border-radius: 24px !important;
+}
+
+.mission-snapshot-main {
+  display: grid !important;
+  grid-template-columns: minmax(130px, 170px) 1fr !important;
+  gap: 22px !important;
+  align-items: center !important;
+}
+
+.mission-progress-ring {
+  width: 132px !important;
+  height: 132px !important;
+  margin: 0 auto !important;
+}
+
+.mission-progress-ring-inner strong {
+  font-size: 28px !important;
+}
+
+.mission-snapshot-stats {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(120px, 1fr)) !important;
+  gap: 12px 18px !important;
+  width: 100% !important;
+}
+
+.mission-snapshot-stat,
+.snapshot-stat,
+.mission-snapshot-stats > div {
+  min-width: 0 !important;
+}
+
+.mission-snapshot-foot {
+  margin-top: 14px !important;
+}
+
+/* Badges button matches option 1 */
+.my-badges-button {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .28), transparent 32%),
+    linear-gradient(135deg, #ffffff, #fff8e8) !important;
+  border-color: rgba(247, 201, 72, .35) !important;
+}
+
+.my-badges-button span {
+  background: var(--fg-gold) !important;
+}
+
+/* Cards keep white against red/dark brand */
+.card,
+.settings-card,
+.admin-card,
+.week-nav-card,
+.mission-snapshot-card,
+.admin-stat-card,
+.admin-leaderboard-card {
+  box-shadow: 0 12px 30px rgba(72, 30, 18, .08) !important;
+}
+
+/* Admin tabs: red/gold active */
+.admin-tabs button.active {
+  background: linear-gradient(135deg, var(--fg-red-1), var(--fg-red-2)) !important;
+  color: white !important;
+}
+
+.admin-tabs button.active span {
+  color: var(--fg-gold) !important;
+}
+
+/* Settings child list: direct switch rows */
+.settings-linked-child.active {
+  border-color: var(--fg-gold) !important;
+  background: linear-gradient(135deg, rgba(247, 201, 72, .16), #fff8f8) !important;
+}
+
+/* Auth card normal and matching new brand */
+.auth-card {
+  background: white !important;
+}
+
+.auth-logo-wrap {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.auth-card h1 {
+  color: var(--fg-red-2) !important;
+}
+
+.auth-card .button.primary,
+.button.primary {
+  background: linear-gradient(135deg, var(--fg-red-1), var(--fg-red-2)) !important;
+  color: white !important;
+}
+
+/* Mobile progress: stack donut then stats */
+@media (max-width: 620px) {
+  .mission-snapshot-main {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+    text-align: center !important;
+  }
+
+  .mission-progress-ring {
+    width: 136px !important;
+    height: 136px !important;
+  }
+
+  .mission-snapshot-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .mission-snapshot-stats > div {
+    justify-content: center !important;
+    text-align: left !important;
+  }
+
+  .mission-snapshot-foot {
+    text-align: center !important;
+  }
+
+  .player-card {
+    grid-template-columns: auto 1fr !important;
+  }
+
+  .player-card .player-avatar {
+    width: 62px !important;
+    height: 62px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .mission-snapshot-stats {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Admin mobile */
+@media (max-width: 560px) {
+  .admin-control-bar {
+    border-radius: 0 0 22px 22px !important;
+    width: 100vw !important;
+    margin-left: calc(50% - 50vw) !important;
+  }
+
+  .admin-control-actions {
+    grid-template-columns: 1fr auto auto !important;
+  }
+
+  .admin-signout-link {
+    font-size: 11px !important;
+  }
+}
