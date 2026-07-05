@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { squadNameMatches } from "../config/squads";
 
 export function useLinkedPlayers(supabase, session, squadConfig) {
   const [players, setPlayers] = useState([]);
@@ -9,13 +8,14 @@ export function useLinkedPlayers(supabase, session, squadConfig) {
     let cancelled = false;
 
     async function loadPlayers() {
-      if (!supabase || !session?.user?.id || !squadConfig) {
+      if (!supabase || !session?.user?.id || !squadConfig?.key) {
         setPlayers([]);
         setPlayersLoaded(true);
         return;
       }
 
       setPlayersLoaded(false);
+
       try {
         const { data: links, error: linkError } = await supabase
           .from("parent_players")
@@ -25,23 +25,26 @@ export function useLinkedPlayers(supabase, session, squadConfig) {
         if (linkError) throw linkError;
 
         const ids = [...new Set((links || []).map(l => l.player_id).filter(Boolean))];
+
         if (!ids.length) {
           if (!cancelled) setPlayers([]);
           return;
         }
 
-        const { data: allPlayers, error: playerError } = await supabase
+        const { data: players, error: playerError } = await supabase
           .from("players")
-          .select("id,name,squad,child_access_token")
+          .select("id,name,squad,squad_key,child_access_token")
           .in("id", ids)
+          .eq("squad_key", squadConfig.key)
           .order("name");
 
         if (playerError) throw playerError;
 
-        const filtered = (allPlayers || []).filter(p => squadNameMatches(p.squad, squadConfig));
-        if (!cancelled) setPlayers(filtered);
-      } catch (e) {
-        console.error("Linked players lookup failed", e);
+        if (!cancelled) {
+          setPlayers(players || []);
+        }
+      } catch (err) {
+        console.error(err);
         if (!cancelled) setPlayers([]);
       } finally {
         if (!cancelled) setPlayersLoaded(true);
@@ -49,7 +52,10 @@ export function useLinkedPlayers(supabase, session, squadConfig) {
     }
 
     loadPlayers();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [supabase, session?.user?.id, squadConfig?.key]);
 
   return { players, playersLoaded };

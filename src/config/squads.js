@@ -1,50 +1,30 @@
 export const SQUADS = {
   "2014-boys": {
     key: "2014-boys",
-    dbProject: "boys",
     squad: "2014 Boys",
-    legacySquad: "2014 Boys",
-    appSquad: "2014 Boys",
-    label: "Fingallians Fitness Challenge",
     shortLabel: "2014 Boys",
     whatsappUrl: "https://chat.whatsapp.com/F3A0lBj6293JQD2oghSoAx",
-    vercelUrl: "https://fingallians-app.vercel.app/",
     showFridayNightHurling: true,
   },
   "2015-girls": {
     key: "2015-girls",
-    dbProject: "girls",
     squad: "2015 Girls",
-    legacySquad: "2015",
-    appSquad: "2015",
-    label: "Fingallians Fitness Challenge",
     shortLabel: "2015 Girls",
     whatsappUrl: "https://chat.whatsapp.com/Bc76P9R4TJvHbbdQ2xEhhA",
-    vercelUrl: "https://fingallians-girls.vercel.app/",
     showFridayNightHurling: true,
   },
   "2017-boys": {
     key: "2017-boys",
-    dbProject: "boys",
     squad: "2017 Boys",
-    legacySquad: "2017 Boys",
-    appSquad: "2017 Boys",
-    label: "Fingallians Fitness Challenge",
     shortLabel: "2017 Boys",
     whatsappUrl: "https://chat.whatsapp.com/FJLfHJpjKbi6KFGzHbpEoQ",
-    vercelUrl: "https://fingallians-boys-2017.vercel.app/",
     showFridayNightHurling: false,
   },
   "2017-girls": {
     key: "2017-girls",
-    dbProject: "girls",
     squad: "2017 Girls",
-    legacySquad: "2017",
-    appSquad: "2017",
-    label: "Fingallians Fitness Challenge",
     shortLabel: "2017 Girls",
     whatsappUrl: "https://chat.whatsapp.com/CUeI5EKF8HOGo0hucgSEPF",
-    vercelUrl: "https://fingallians-girls-2017.vercel.app/",
     showFridayNightHurling: false,
   },
 };
@@ -75,14 +55,5 @@ export function getSquadConfig(key) {
 }
 
 export function squadNameMatches(value, squadConfig) {
-  const val = String(value || "").trim().toLowerCase();
-  const names = [
-    squadConfig.key,
-    squadConfig.squad,
-    squadConfig.legacySquad,
-    squadConfig.appSquad,
-    squadConfig.shortLabel,
-    squadConfig.label,
-  ].filter(Boolean).map(x => String(x).trim().toLowerCase());
-  return names.includes(val);
+  return String(value || "").trim().toLowerCase() === String(squadConfig?.squad || "").trim().toLowerCase();
 }

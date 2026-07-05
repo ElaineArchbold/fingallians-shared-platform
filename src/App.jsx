@@ -1,27 +1,69 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "./styles/app.css";
+import ChildHome from "./components/child/ChildHome";
 
 import { useSquadSelection } from "./hooks/useSquadSelection";
 import { useAuth } from "./hooks/useAuth";
 import { useRoles } from "./hooks/useRoles";
 import { useLinkedPlayers } from "./hooks/useLinkedPlayers";
+import { useTermsAcceptance } from "./hooks/useTermsAcceptance";
 
-import { getSupabaseClient } from "./lib/supabaseClient";
-import { adminSquadKeysForRoles, isAdminForSquad, isSuperAdminForSquad } from "./lib/rbac";
+import { supabase } from "./lib/supabaseClient";
+import {
+  adminSquadKeysForRoles,
+  isAdminForSquad,
+  isSuperAdminForSquad,
+} from "./lib/rbac";
 
-import SquadSelector from "./components/layout/SquadSelector";
 import AuthPanel from "./components/auth/AuthPanel";
+import TermsAndConditions from "./components/auth/TermsAndConditions";
 import ParentHome from "./components/parent/ParentHome";
 import AdminHome from "./components/admin/AdminHome";
 
+function getChildLinkParams() {
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    childToken: params.get("child") || "",
+    squadFromUrl: params.get("squad") || "",
+  };
+}
+
 export default function App() {
+  const { childToken, squadFromUrl } = getChildLinkParams();
+  const childMode = Boolean(childToken);
+
   const { squadKey, squadConfig, setSquadKey } = useSquadSelection();
-  const supabase = useMemo(() => getSupabaseClient(squadConfig), [squadConfig.key]);
+
+  useEffect(() => {
+    document.body.classList.toggle("is-child-link-mode", childMode);
+
+    return () => {
+      document.body.classList.remove("is-child-link-mode");
+    };
+  }, [childMode]);
+
+  useEffect(() => {
+    if (childMode && squadFromUrl && squadFromUrl !== squadKey) {
+      setSquadKey(squadFromUrl);
+      localStorage.setItem("lastSquadKey", squadFromUrl);
+    }
+  }, [childMode, squadFromUrl, squadKey, setSquadKey]);
 
   const { session, authLoaded } = useAuth(supabase);
   const { roles, rolesLoaded } = useRoles(supabase, session);
-  const { players, playersLoaded } = useLinkedPlayers(supabase, session, squadConfig);
+  const { players, playersLoaded } = useLinkedPlayers(
+    supabase,
+    session,
+    squadConfig
+  );
+  const { termsAccepted, termsAcceptedAt, termsLoaded } = useTermsAcceptance(
+    supabase,
+    session,
+    squadConfig
+  );
 
+  const [parentView, setParentView] = useState("challenge");
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
 
   const adminKeys = adminSquadKeysForRoles(roles);
@@ -30,64 +72,169 @@ export default function App() {
   const canUseAdminSelector = isSuperAdmin && adminKeys.length > 1;
 
   async function signOut() {
-    await supabase?.auth.signOut();
+    await supabase.auth.signOut();
     setSelectedPlayerId("");
+    setParentView("challenge");
   }
 
-  if (!supabase) {
+  function changeSquad(next) {
+    setSelectedPlayerId("");
+    setParentView("challenge");
+    setSquadKey(next);
+  }
+
+  if (childMode) {
     return (
-      <div className="app-shell">
-        <div className="dev-note">
-          Missing Supabase environment variables. Copy .env.example to .env.local and fill in the Boys/Girls project keys.
+      <div className="app-shell child-link-shell">
+        <div className="topbar child-topbar">
+          <div className="topbar-brand">
+            <img src="/fingallians-crest.png" alt="Fingallians crest" />
+
+            <div className="topbar-title">
+              <h1>Fingallians Fitness Challenge</h1>
+            </div>
+          </div>
         </div>
+
+        <ChildHome
+          supabase={supabase}
+          squadConfig={squadConfig}
+          childToken={childToken}
+        />
       </div>
     );
   }
 
-  if (!authLoaded || (session && !rolesLoaded) || (session && !isAdmin && !playersLoaded)) {
-    return <div className="app-shell"><div className="card">Loading…</div></div>;
+  if (
+    !authLoaded ||
+    (session && !rolesLoaded) ||
+    (session && !termsLoaded) ||
+    (session && !isAdmin && !playersLoaded)
+  ) {
+    return (
+      <div className="app-shell">
+        <div className="card">Loading…</div>
+      </div>
+    );
   }
 
   return (
-    <div className="app-shell">
-      <div className="topbar">
-        <div>
-          <h1>Fingallians Fitness Challenge</h1>
-          <p>{squadConfig.shortLabel}</p>
-        </div>
+    <>
+      <div className="app-shell">
         {session ? (
-          <button className="button secondary" style={{ width: "auto" }} onClick={signOut}>
-            Sign out
-          </button>
+          <div className="topbar">
+            <div className="topbar-brand">
+              <img src="/fingallians-crest.png" alt="Fingallians crest" />
+
+              <div className="topbar-title">
+                <h1>Fingallians Fitness Challenge</h1>
+              </div>
+            </div>
+
+            {isAdmin ? (
+              <div className="topbar-actions">
+                {canUseAdminSelector ? (
+                  <select
+                    className="select topbar-select"
+                    value={squadKey}
+                    onChange={e => changeSquad(e.target.value)}
+                  >
+                    {adminKeys.map(key => (
+                      <option key={key} value={key}>
+                        {key}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+
+                <button
+                  className="button secondary signout-button"
+                  onClick={signOut}
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
+
+        {session && !termsAccepted ? (
+          <TermsAndConditions
+            supabase={supabase}
+            session={session}
+            squadConfig={squadConfig}
+            onAccepted={() => window.location.reload()}
+          />
+        ) : null}
+
+        {!session ? (
+          <AuthPanel
+            supabase={supabase}
+            session={session}
+            squadConfig={squadConfig}
+            onChangeSquad={next => {
+              setSquadKey(next);
+              localStorage.setItem("lastSquadKey", next);
+            }}
+            squadKey={squadKey}
+            onSelectSquad={next => {
+              setSelectedPlayerId("");
+              setParentView("challenge");
+              setSquadKey(next);
+              localStorage.setItem("lastSquadKey", next);
+            }}
+          />
+        ) : !termsAccepted ? null : isAdmin ? (
+          <AdminHome squadConfig={squadConfig} isSuperAdmin={isSuperAdmin} />
+        ) : (
+          <ParentHome
+            supabase={supabase}
+            session={session}
+            squadConfig={squadConfig}
+            squadKey={squadKey}
+            onChangeSquad={next => {
+              setSquadKey(next);
+              localStorage.setItem("lastSquadKey", next);
+            }}
+            players={players}
+            selectedPlayerId={selectedPlayerId}
+            onSelectPlayer={setSelectedPlayerId}
+            parentView={parentView}
+            onChangeParentView={setParentView}
+            onSignOut={signOut}
+            termsAcceptedAt={termsAcceptedAt}
+            termsAcceptedAt={termsAcceptedAt}
+          />
+        )}
       </div>
 
-      <SquadSelector
-        value={squadKey}
-        onChange={next => {
-          setSelectedPlayerId("");
-          setSquadKey(next);
-        }}
-        allowedKeys={canUseAdminSelector ? adminKeys : undefined}
-        label={isSuperAdmin ? "Super Admin squad" : "Select squad/year"}
-      />
+      {!isAdmin && session && termsAccepted ? (
+        <nav className="bottom-nav">
+          <button
+            className={parentView === "challenge" ? "active" : ""}
+            onClick={() => setParentView("challenge")}
+          >
+            <span>🏠</span>
+            <small>Home</small>
+          </button>
 
-      <div className="dev-note">
-        Foundation v1: auth, squad selection, RBAC lookup and Select your child flow. Existing live apps are untouched.
-      </div>
+          <button
+            className={parentView === "progress" ? "active" : ""}
+            onClick={() => setParentView("progress")}
+          >
+            <span>📈</span>
+            <small>Progress</small>
+          </button>
 
-      {!session ? (
-        <AuthPanel supabase={supabase} />
-      ) : isAdmin ? (
-        <AdminHome squadConfig={squadConfig} isSuperAdmin={isSuperAdmin} />
-      ) : (
-        <ParentHome
-          squadConfig={squadConfig}
-          players={players}
-          selectedPlayerId={selectedPlayerId}
-          onSelectPlayer={setSelectedPlayerId}
-        />
-      )}
-    </div>
+          <button
+            className={parentView === "settings" ? "active" : ""}
+            onClick={() => setParentView("settings")}
+          >
+            <span>⚙️</span>
+            <small>Settings</small>
+          </button>
+        </nav>
+      ) : null}
+    </>
   );
 }

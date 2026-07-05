@@ -12,15 +12,19 @@
   "dependencies": {
     "@supabase/supabase-js": "latest",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
+    "canvas-confetti": "latest",
+    "html-to-image": "^1.11.13",
+    "leaflet": "^1.9.4",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
-    "canvas-confetti": "latest"
+    "react-icons": "^5.7.0",
+    "react-leaflet": "^5.0.0",
+    "vite": "latest"
   },
   "devDependencies": {
-    "eslint": "latest",
     "@eslint/js": "latest",
+    "eslint": "latest",
     "eslint-plugin-react-hooks": "latest",
     "eslint-plugin-react-refresh": "latest",
     "globals": "latest"

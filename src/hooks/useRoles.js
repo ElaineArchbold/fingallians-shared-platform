@@ -15,31 +15,31 @@ export function useRoles(supabase, session) {
       }
 
       setRolesLoaded(false);
+
       try {
         const { data, error } = await supabase
           .from("user_roles")
-          .select("user_email,squad,role")
+          .select("user_email,squad,squad_key,role")
           .eq("user_email", session.user.email.toLowerCase());
 
-        if (cancelled) return;
-        if (error) {
-          console.error("Role lookup failed", error);
-          setRoles([]);
-        } else {
+        if (error) throw error;
+
+        if (!cancelled) {
           setRoles(data || []);
         }
-      } catch (e) {
-        if (!cancelled) {
-          console.error("Role lookup crashed", e);
-          setRoles([]);
-        }
+      } catch (err) {
+        console.error("Role lookup failed", err);
+        if (!cancelled) setRoles([]);
       } finally {
         if (!cancelled) setRolesLoaded(true);
       }
     }
 
     loadRoles();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [supabase, session?.user?.email]);
 
   return { roles, rolesLoaded };
