@@ -6863,3 +6863,380 @@ body {
   font-size: 13px;
   font-weight: 900;
 }
+
+
+/* =====================================================
+   RESTORED SPLIT LOGIN
+   Desktop: logo/brand left, squad buttons + login right
+   Mobile: stacked
+===================================================== */
+
+.split-auth-screen {
+  min-height: calc(100vh - 24px);
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 22px 14px;
+}
+
+.split-auth-card {
+  width: min(980px, 100%);
+  min-height: 580px;
+  display: grid;
+  grid-template-columns: minmax(320px, .9fr) minmax(360px, 1.1fr);
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid rgba(90, 34, 34, .12);
+  border-radius: 32px;
+  box-shadow: 0 24px 60px rgba(80, 24, 16, .16);
+}
+
+.split-auth-brand {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .28), transparent 32%),
+    linear-gradient(135deg, var(--fg-red-1, #d81224), var(--fg-red-2, #a80d19) 58%, var(--fg-red-3, #700611));
+  color: white;
+  padding: 42px 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.split-auth-crest {
+  width: 116px;
+  height: 116px;
+  border-radius: 34px;
+  background: rgba(255,255,255,.12);
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+}
+
+.split-auth-crest img {
+  width: 94px;
+  height: 94px;
+  object-fit: contain;
+  background: white;
+  border: 5px solid var(--fg-gold, #f7c948);
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 10px 24px rgba(0,0,0,.18);
+}
+
+.split-auth-kicker {
+  width: fit-content;
+  margin: 0 0 14px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(247, 201, 72, .18);
+  border: 1px solid rgba(247, 201, 72, .48);
+  color: var(--fg-gold, #f7c948);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.split-auth-brand h1 {
+  margin: 0;
+  color: white;
+  font-family: var(--font-heading);
+  font-size: clamp(42px, 5vw, 64px);
+  line-height: .95;
+  text-transform: uppercase;
+}
+
+.split-auth-brand > p {
+  max-width: 360px;
+  margin: 18px 0 0;
+  color: rgba(255,255,255,.86);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.split-auth-selected {
+  margin-top: 30px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 20px;
+  padding: 14px;
+}
+
+.split-auth-selected span {
+  display: block;
+  color: rgba(255,255,255,.7);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.split-auth-selected strong {
+  display: block;
+  margin-top: 3px;
+  color: white;
+  font-size: 20px;
+}
+
+.split-auth-panel {
+  padding: 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.split-auth-panel-header h2 {
+  margin: 0;
+  color: var(--fg-red-2, #a80d19);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.split-auth-panel-header p {
+  margin: 8px 0 18px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.squad-button-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.squad-choice-button {
+  border: 2px solid #f0ddd8;
+  background: #fff8f8;
+  color: var(--text);
+  border-radius: 16px;
+  min-height: 54px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.squad-choice-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(197, 20, 23, .35);
+}
+
+.squad-choice-button.active {
+  background: linear-gradient(135deg, var(--fg-red-1, #d81224), var(--fg-red-2, #a80d19));
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 12px 24px rgba(168, 13, 25, .18);
+}
+
+.split-auth-form {
+  margin-top: 18px;
+  display: grid;
+  gap: 9px;
+}
+
+.split-auth-form label {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.split-auth-form input:not([type="checkbox"]),
+.split-auth-form select,
+.password-input-wrap input {
+  width: 100%;
+  min-height: 52px;
+  border: 2px solid #eadbd8;
+  border-radius: 16px;
+  background: white;
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 16px;
+  outline: none;
+}
+
+.split-auth-form input:not([type="checkbox"]):focus,
+.password-input-wrap input:focus {
+  border-color: var(--club-red);
+  box-shadow: 0 0 0 4px rgba(197, 20, 23, .12);
+}
+
+.password-input-wrap {
+  position: relative;
+}
+
+.password-input-wrap input {
+  padding-right: 52px;
+}
+
+.password-eye-button {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 38px;
+  height: 38px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 999px;
+  background: #fff3f3;
+  color: var(--club-red);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.password-eye-button svg {
+  width: 21px;
+  height: 21px;
+  fill: currentColor;
+}
+
+.split-remember-row {
+  margin-top: 8px !important;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.split-remember-row input {
+  width: 16px;
+  height: 16px;
+}
+
+.split-auth-submit {
+  min-height: 54px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--fg-red-1, #d81224), var(--fg-red-2, #a80d19));
+  color: white;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(168, 13, 25, .22);
+}
+
+.split-auth-submit:disabled {
+  opacity: .68;
+  cursor: wait;
+}
+
+.split-form-error,
+.split-form-message {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.split-form-error {
+  color: var(--club-red);
+}
+
+.split-form-message {
+  color: #16843d;
+}
+
+.split-auth-links {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+
+.split-auth-links button {
+  border: 0;
+  background: transparent;
+  color: var(--club-red);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.select-squad-empty {
+  margin-top: 18px;
+  min-height: 170px;
+  border: 2px dashed #f0ddd8;
+  border-radius: 20px;
+  background: #fff8f8;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.select-squad-empty span {
+  font-size: 30px;
+}
+
+.select-squad-empty strong {
+  color: var(--text);
+}
+
+@media (max-width: 780px) {
+  .split-auth-screen {
+    padding: 14px;
+  }
+
+  .split-auth-card {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    border-radius: 28px;
+  }
+
+  .split-auth-brand {
+    padding: 28px 22px;
+    text-align: center;
+    align-items: center;
+  }
+
+  .split-auth-crest {
+    width: 94px;
+    height: 94px;
+    margin-bottom: 16px;
+  }
+
+  .split-auth-crest img {
+    width: 76px;
+    height: 76px;
+  }
+
+  .split-auth-brand h1 {
+    font-size: clamp(36px, 11vw, 48px);
+  }
+
+  .split-auth-brand > p {
+    font-size: 15px;
+  }
+
+  .split-auth-selected {
+    width: 100%;
+    max-width: 360px;
+    margin-top: 18px;
+  }
+
+  .split-auth-panel {
+    padding: 24px 18px;
+  }
+
+  .split-auth-panel-header {
+    text-align: center;
+  }
+
+  .split-auth-panel-header h2 {
+    font-size: 28px;
+  }
+
+  .squad-button-grid {
+    grid-template-columns: 1fr;
+  }
+}
