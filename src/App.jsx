@@ -125,8 +125,8 @@ export default function App() {
   return (
     <>
       <div className={isAdmin ? "app-shell admin-app-shell" : "app-shell"}>
-        {session ? (
-          <div className={isAdmin ? "topbar admin-topbar" : "topbar"}>
+        {session && !isAdmin ? (
+          <div className="topbar">
             <div className="topbar-brand">
               <img src="/fingallians-crest.png" alt="Fingallians crest" />
 
@@ -184,7 +184,7 @@ export default function App() {
             }}
           />
         ) : isAdmin ? (
-          <AdminHome squadConfig={squadConfig} isSuperAdmin={isSuperAdmin} />
+          <AdminHome squadConfig={squadConfig} isSuperAdmin={isSuperAdmin} onSignOut={signOut} />
         ) : !termsAccepted ? null : (
           <ParentHome
             supabase={supabase}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import ChallengeHome from "../parent/ChallengeHome";
+import RunLoggerModal from "../parent/RunLoggerModal";
 
 const SQUADS = [
   { key: "all", label: "All Squads" },
@@ -10,12 +11,12 @@ const SQUADS = [
 ];
 
 const ADMIN_TABS = [
-  { key: "dashboard", label: "Dashboard", icon: "📊" },
+  { key: "overview", label: "Overview", icon: "📊" },
   { key: "approvals", label: "Approvals", icon: "🔔" },
-  { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
   { key: "players", label: "Players", icon: "👧" },
   { key: "plans", label: "Plans", icon: "🗓️" },
-  { key: "progress", label: "Squad Progress", icon: "📈" },
+  { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
+  { key: "settings", label: "Settings", icon: "⚙️" },
 ];
 
 function displaySquad(key) {
@@ -31,36 +32,8 @@ function initials(name = "") {
     .toUpperCase();
 }
 
-function number(value) {
+function num(value) {
   return Number(value || 0);
-}
-
-function dateText(value) {
-  if (!value) return "—";
-
-  try {
-    return new Date(value).toLocaleDateString([], {
-      day: "2-digit",
-      month: "short",
-    });
-  } catch {
-    return "—";
-  }
-}
-
-function timeText(value) {
-  if (!value) return "—";
-
-  try {
-    return new Date(value).toLocaleString([], {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 function isApproved(completion) {
@@ -73,13 +46,15 @@ function isPendingApproval(completion) {
 
 function isRunActivity(activity) {
   const title = String(activity?.title || "").toLowerCase();
-
   return activity?.target_unit === "km" || title.includes("run") || activity?.gps_preferred;
 }
 
-function defaultXpFor(activity, source) {
+function xpForActivity(activity, completionType = "activity") {
   const title = String(activity?.title || "").toLowerCase();
-  const run = isRunActivity(activity) || source === "gps" || source === "manual";
+  const run =
+    isRunActivity(activity) ||
+    completionType === "gps" ||
+    completionType === "manual";
 
   if (run) return 3;
 
@@ -97,33 +72,45 @@ function defaultXpFor(activity, source) {
   return 1;
 }
 
-function downloadElementAsPng(element, filename) {
-  if (!element) return;
+function dateTime(value) {
+  if (!value) return "—";
 
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${element.offsetWidth}" height="${element.offsetHeight}">
-      <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml">
-          ${element.outerHTML}
-        </div>
-      </foreignObject>
-    </svg>
-  `;
-
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = filename;
-  link.click();
-
-  setTimeout(() => URL.revokeObjectURL(url), 500);
+  try {
+    return new Date(value).toLocaleString([], {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
 }
 
-export default function AdminHome({ squadConfig, isSuperAdmin }) {
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [adminSquad, setAdminSquad] = useState(squadConfig?.key || "all");
+async function downloadNodeAsImage(node, filename) {
+  if (!node) return;
+
+  const htmlToImage = await import("html-to-image").catch(() => null);
+
+  if (htmlToImage?.toPng) {
+    const dataUrl = await htmlToImage.toPng(node, {
+      pixelRatio: 2,
+      backgroundColor: "#fffaf4",
+    });
+
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = filename;
+    link.click();
+    return;
+  }
+
+  window.print();
+}
+
+export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [adminSquad, setAdminSquad] = useState(isSuperAdmin ? "all" : squadConfig.key);
   const [loading, setLoading] = useState(true);
   const [players, setPlayers] = useState([]);
   const [completions, setCompletions] = useState([]);
@@ -132,10 +119,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   const [badges, setBadges] = useState([]);
   const [activities, setActivities] = useState([]);
   const [termsRows, setTermsRows] = useState([]);
-  const [detailModal, setDetailModal] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [detailModal, setDetailModal] = useState(null);
   const [planWeek, setPlanWeek] = useState(1);
   const [editingActivity, setEditingActivity] = useState(null);
+  const [coachPlayer, setCoachPlayer] = useState(null);
+  const [runActivity, setRunActivity] = useState(null);
   const [toast, setToast] = useState("");
 
   const leaderboardRef = useRef(null);
@@ -147,18 +136,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     return players.filter(player => player.squad_key === adminSquad);
   }, [players, adminSquad]);
 
-  const filteredPlayerIds = useMemo(() => {
-    return new Set(filteredPlayers.map(player => player.id));
-  }, [filteredPlayers]);
+  const filteredIds = useMemo(() => new Set(filteredPlayers.map(player => player.id)), [filteredPlayers]);
 
-  const filteredCompletions = completions.filter(row => filteredPlayerIds.has(row.player_id));
-  const filteredXpRows = xpRows.filter(row => filteredPlayerIds.has(row.player_id));
-  const filteredRuns = runs.filter(row => filteredPlayerIds.has(row.player_id));
-  const filteredBadges = badges.filter(row => filteredPlayerIds.has(row.player_id));
-  const filteredTermsRows = termsRows.filter(row => {
-    if (adminSquad === "all") return true;
-    return row.squad_key === adminSquad;
-  });
+  const filteredCompletions = completions.filter(row => filteredIds.has(row.player_id));
+  const filteredXpRows = xpRows.filter(row => filteredIds.has(row.player_id));
+  const filteredRuns = runs.filter(row => filteredIds.has(row.player_id));
+  const filteredBadges = badges.filter(row => filteredIds.has(row.player_id));
+  const filteredTerms = termsRows.filter(row => adminSquad === "all" || row.squad_key === adminSquad);
 
   const activePlayerIds = new Set([
     ...filteredCompletions.map(row => row.player_id),
@@ -171,7 +155,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     .map(player => {
       const xp = filteredXpRows
         .filter(row => row.player_id === player.id)
-        .reduce((total, row) => total + number(row.xp), 0);
+        .reduce((sum, row) => sum + num(row.xp), 0);
 
       const completed = filteredCompletions.filter(
         row => row.player_id === player.id && isApproved(row)
@@ -183,7 +167,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
 
       const distance = filteredRuns
         .filter(row => row.player_id === player.id)
-        .reduce((total, row) => total + number(row.distance_km), 0);
+        .reduce((sum, row) => sum + num(row.distance_km), 0);
 
       return {
         player,
@@ -196,18 +180,18 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     })
     .sort((a, b) => b.xp - a.xp || b.completed - a.completed || a.player.name.localeCompare(b.player.name));
 
-  const squadProgress = SQUADS.filter(squad => squad.key !== "all").map(squad => {
+  const squadStats = SQUADS.filter(item => item.key !== "all").map(squad => {
     const squadPlayers = players.filter(player => player.squad_key === squad.key);
-    const squadIds = new Set(squadPlayers.map(player => player.id));
-    const squadCompletions = completions.filter(row => squadIds.has(row.player_id));
-    const squadRuns = runs.filter(row => squadIds.has(row.player_id));
+    const ids = new Set(squadPlayers.map(player => player.id));
+    const squadCompletions = completions.filter(row => ids.has(row.player_id));
+    const squadRuns = runs.filter(row => ids.has(row.player_id));
     const squadXp = xpRows
-      .filter(row => squadIds.has(row.player_id))
-      .reduce((total, row) => total + number(row.xp), 0);
+      .filter(row => ids.has(row.player_id))
+      .reduce((sum, row) => sum + num(row.xp), 0);
 
     return {
       ...squad,
-      players: squadPlayers.length,
+      registered: squadPlayers.length,
       active: new Set([
         ...squadCompletions.map(row => row.player_id),
         ...squadRuns.map(row => row.player_id),
@@ -215,7 +199,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
       completions: squadCompletions.filter(isApproved).length,
       awaiting: squadCompletions.filter(isPendingApproval).length,
       runs: squadRuns.length,
-      distance: squadRuns.reduce((total, row) => total + number(row.distance_km), 0),
+      distance: squadRuns.reduce((sum, row) => sum + num(row.distance_km), 0),
       xp: squadXp,
     };
   });
@@ -223,17 +207,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   const planActivities = activities
     .filter(activity => adminSquad === "all" || activity.squad_key === adminSquad)
     .filter(activity => Number(activity.week_number || 1) === Number(planWeek))
-    .sort((a, b) => {
-      const aKey = `${a.squad_key}-${a.section}-${a.title}`;
-      const bKey = `${b.squad_key}-${b.section}-${b.title}`;
-      return aKey.localeCompare(bKey);
-    });
+    .sort((a, b) => `${a.squad_key}-${a.section}-${a.title}`.localeCompare(`${b.squad_key}-${b.section}-${b.title}`));
 
-  useEffect(() => {
-    if (!isSuperAdmin && squadConfig?.key) {
-      setAdminSquad(squadConfig.key);
-    }
-  }, [isSuperAdmin, squadConfig?.key]);
+  const totalDistance = filteredRuns.reduce((sum, row) => sum + num(row.distance_km), 0);
+  const totalXp = filteredXpRows.reduce((sum, row) => sum + num(row.xp), 0);
 
   useEffect(() => {
     loadAdminData();
@@ -258,12 +235,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     setLoading(true);
 
     const [
-      playersResult,
-      completionsResult,
+      playerResult,
+      completionResult,
       xpResult,
-      runsResult,
-      badgesResult,
-      activitiesResult,
+      runResult,
+      badgeResult,
+      activityResult,
       termsResult,
     ] = await Promise.all([
       supabase.from("players").select("*").order("squad_key").order("name"),
@@ -275,20 +252,20 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
       supabase.from("terms_acceptances").select("*").order("accepted_at", { ascending: false }),
     ]);
 
-    if (playersResult.error) console.error(playersResult.error);
-    if (completionsResult.error) console.error(completionsResult.error);
+    if (playerResult.error) console.error(playerResult.error);
+    if (completionResult.error) console.error(completionResult.error);
     if (xpResult.error) console.error(xpResult.error);
-    if (runsResult.error) console.error(runsResult.error);
-    if (badgesResult.error) console.error(badgesResult.error);
-    if (activitiesResult.error) console.error(activitiesResult.error);
+    if (runResult.error) console.error(runResult.error);
+    if (badgeResult.error) console.error(badgeResult.error);
+    if (activityResult.error) console.error(activityResult.error);
     if (termsResult.error) console.error(termsResult.error);
 
-    setPlayers(playersResult.data || []);
-    setCompletions(completionsResult.data || []);
+    setPlayers(playerResult.data || []);
+    setCompletions(completionResult.data || []);
     setXpRows(xpResult.data || []);
-    setRuns(runsResult.data || []);
-    setBadges(badgesResult.data || []);
-    setActivities(activitiesResult.data || []);
+    setRuns(runResult.data || []);
+    setBadges(badgeResult.data || []);
+    setActivities(activityResult.data || []);
     setTermsRows(termsResult.data || []);
     setLoading(false);
   }
@@ -296,6 +273,14 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   function showToast(message) {
     setToast(message);
     setTimeout(() => setToast(""), 2600);
+  }
+
+  function playerById(id) {
+    return players.find(player => player.id === id) || {};
+  }
+
+  function activityById(id) {
+    return activities.find(activity => activity.id === id) || {};
   }
 
   async function addPlayer(formData) {
@@ -323,7 +308,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   }
 
   async function removePlayer(player) {
-    const ok = window.confirm(`Remove ${player.name}? This will delete their player record.`);
+    const ok = window.confirm(`Remove ${player.name}?`);
     if (!ok) return;
 
     const { error } = await supabase.from("players").delete().eq("id", player.id);
@@ -365,8 +350,8 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   }
 
   async function approveCompletion(completion) {
-    const activity = activities.find(item => item.id === completion.activity_id);
-    const xp = defaultXpFor(activity, completion.completion_type);
+    const activity = activityById(completion.activity_id);
+    const xp = xpForActivity(activity, completion.completion_type);
 
     const { error: updateError } = await supabase
       .from("activity_completions")
@@ -397,7 +382,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   }
 
   async function rejectCompletion(completion) {
-    const ok = window.confirm("Reject and remove this pending approval?");
+    const ok = window.confirm("Reject and remove this pending item?");
     if (!ok) return;
 
     const { error } = await supabase
@@ -439,108 +424,180 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     loadAdminData();
   }
 
-  function openDetail(type) {
-    setDetailModal(type);
+  async function adminToggleActivity(activity, existingCompletion, player) {
+    if (!player?.id) return;
+
+    if (existingCompletion) {
+      const { error } = await supabase
+        .from("activity_completions")
+        .delete()
+        .eq("id", existingCompletion.id)
+        .neq("gps_verified", true);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      await supabase
+        .from("xp_transactions")
+        .delete()
+        .eq("player_id", player.id)
+        .eq("activity_id", activity.id);
+
+      loadAdminData();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("activity_completions")
+      .insert({
+        player_id: player.id,
+        activity_id: activity.id,
+        status: "completed",
+        completion_type: "admin_activity",
+        gps_verified: false,
+        completed_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    const xp = xpForActivity(activity, "admin_activity");
+
+    if (xp) {
+      await supabase.from("xp_transactions").insert({
+        player_id: player.id,
+        activity_id: activity.id,
+        activity_completion_id: data.id,
+        xp,
+        reason: activity.title,
+        source: "admin_activity",
+      });
+    }
+
+    loadAdminData();
   }
 
-  function playerById(id) {
-    return players.find(player => player.id === id) || {};
+  async function adminSubmitApproval(activity, type, player) {
+    if (!player?.id) return;
+
+    const { error } = await supabase.from("activity_completions").upsert(
+      {
+        player_id: player.id,
+        activity_id: activity.id,
+        status: "awaiting_approval",
+        completion_type: type === "bonus" ? "bonus_approval" : "squad_approval",
+        gps_verified: false,
+        completed_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "player_id,activity_id",
+      }
+    );
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadAdminData();
   }
 
-  function activityById(id) {
-    return activities.find(activity => activity.id === id) || {};
-  }
-
-  function renderDashboard() {
-    const registered = filteredPlayers.length;
-    const active = activePlayerIds.size;
-    const sessionsLogged = filteredCompletions.length + filteredRuns.length;
-    const childLinkUsers = new Set(filteredTermsRows.map(row => row.user_id)).size;
-
+  function renderOverview() {
     return (
       <div className="admin-panel">
         <div className="admin-stat-grid">
-          <button className="admin-stat-card" onClick={() => openDetail("registered")}>
+          <button className="admin-stat-card" onClick={() => setDetailModal("registered")}>
             <span>👧</span>
-            <strong>{registered}</strong>
-            <small>Registered Players</small>
+            <strong>{filteredPlayers.length}</strong>
+            <small>Registered</small>
           </button>
 
-          <button className="admin-stat-card" onClick={() => openDetail("active")}>
+          <button className="admin-stat-card" onClick={() => setDetailModal("active")}>
             <span>🔥</span>
-            <strong>{active}</strong>
-            <small>Active Players</small>
+            <strong>{activePlayerIds.size}</strong>
+            <small>Active</small>
           </button>
 
-          <button className="admin-stat-card" onClick={() => openDetail("sessions")}>
+          <button className="admin-stat-card" onClick={() => setDetailModal("sessions")}>
             <span>✅</span>
-            <strong>{sessionsLogged}</strong>
-            <small>Sessions Logged</small>
+            <strong>{filteredCompletions.length + filteredRuns.length}</strong>
+            <small>Logged</small>
           </button>
 
-          <button className="admin-stat-card" onClick={() => openDetail("childLinks")}>
-            <span>🔗</span>
-            <strong>{childLinkUsers}</strong>
-            <small>Child Link Users</small>
-          </button>
-
-          <button className="admin-stat-card urgent" onClick={() => setActiveTab("approvals")}>
+          <button className="admin-stat-card" onClick={() => setActiveTab("approvals")}>
             <span>🔔</span>
             <strong>{pendingApprovals.length}</strong>
-            <small>Pending Approvals</small>
+            <small>Approvals</small>
           </button>
 
-          <button className="admin-stat-card" onClick={() => openDetail("unregistered")}>
-            <span>🕵️</span>
-            <strong>{Math.max(0, filteredPlayers.length - filteredTermsRows.length)}</strong>
-            <small>Not Yet Registered</small>
+          <button className="admin-stat-card">
+            <span>🏃</span>
+            <strong>{totalDistance.toFixed(1)}</strong>
+            <small>KM Run</small>
+          </button>
+
+          <button className="admin-stat-card">
+            <span>⚡</span>
+            <strong>{totalXp}</strong>
+            <small>Total XP</small>
           </button>
         </div>
 
-        <section className="admin-card">
-          <h2>Admin Notifications</h2>
+        {adminSquad === "all" ? (
+          <section className="admin-card">
+            <h2>All-Squads Overview</h2>
 
-          {pendingApprovals.length ? (
-            <div className="admin-notification-list">
-              {pendingApprovals.slice(0, 5).map(item => {
+            <div className="admin-squad-grid">
+              {squadStats.map(squad => (
+                <button
+                  key={squad.key}
+                  className="admin-squad-card"
+                  onClick={() => setAdminSquad(squad.key)}
+                >
+                  <strong>{squad.label}</strong>
+                  <span>{squad.active}/{squad.registered} active</span>
+                  <div className="admin-progress-track">
+                    <div style={{ width: `${squad.registered ? Math.round((squad.active / squad.registered) * 100) : 0}%` }} />
+                  </div>
+                  <small>{squad.distance.toFixed(1)} km · {squad.xp} XP · {squad.awaiting} waiting</small>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="admin-card">
+          <h2>Activity Feed</h2>
+
+          <div className="admin-feed-list">
+            {[...filteredCompletions, ...filteredRuns]
+              .sort((a, b) => new Date(b.completed_at || b.saved_at || 0) - new Date(a.completed_at || a.saved_at || 0))
+              .slice(0, 10)
+              .map((item, index) => {
                 const player = playerById(item.player_id);
-                const activity = activityById(item.activity_id);
+                const activity = item.activity_id ? activityById(item.activity_id) : null;
 
                 return (
-                  <button
-                    key={item.id}
-                    className="admin-notification-row"
-                    onClick={() => setActiveTab("approvals")}
-                  >
-                    <span>🔔</span>
+                  <div className="admin-feed-row" key={`${item.id}-${index}`}>
+                    <span>{item.run_type ? "🏃" : item.status === "awaiting_approval" ? "🔔" : "✅"}</span>
                     <div>
-                      <strong>{player.name || "Unknown player"}</strong>
-                      <small>{activity.title || item.completion_type} · {displaySquad(player.squad_key)}</small>
+                      <strong>{player.name || item.player_name || "Unknown"}</strong>
+                      <small>
+                        {item.run_type
+                          ? `${item.label || "Run"} · ${num(item.distance_km).toFixed(2)} km`
+                          : `${activity?.title || item.completion_type} · ${item.status}`}
+                      </small>
                     </div>
-                    <em>Review</em>
-                  </button>
+                    <em>{dateTime(item.completed_at || item.saved_at)}</em>
+                  </div>
                 );
               })}
-            </div>
-          ) : (
-            <p className="muted">No approvals waiting.</p>
-          )}
-        </section>
-
-        <section className="admin-card">
-          <h2>Squad Snapshot</h2>
-
-          <div className="admin-squad-grid">
-            {squadProgress.map(squad => (
-              <div className="admin-squad-card" key={squad.key}>
-                <strong>{squad.label}</strong>
-                <span>{squad.active}/{squad.players} active</span>
-                <div className="admin-progress-track">
-                  <div style={{ width: `${squad.players ? Math.round((squad.active / squad.players) * 100) : 0}%` }} />
-                </div>
-                <small>{squad.distance.toFixed(1)} km · {squad.xp} XP</small>
-              </div>
-            ))}
           </div>
         </section>
       </div>
@@ -551,23 +608,28 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     return (
       <div className="admin-panel">
         <section className="admin-card">
-          <h2>Pending Approvals</h2>
+          <h2>Approvals Queue</h2>
 
           {pendingApprovals.length ? (
             <div className="admin-approval-list">
               {pendingApprovals.map(item => {
                 const player = playerById(item.player_id);
                 const activity = activityById(item.activity_id);
+                const run = runs.find(row => row.player_id === item.player_id && row.task_key === item.activity_id);
 
                 return (
                   <div className="admin-approval-card" key={item.id}>
                     <div>
                       <strong>{player.name || "Unknown player"}</strong>
                       <p>{activity.title || item.completion_type}</p>
-                      <small>
-                        {displaySquad(player.squad_key)} · {timeText(item.completed_at)}
-                      </small>
+                      <small>{displaySquad(player.squad_key)} · {dateTime(item.completed_at)}</small>
                     </div>
+
+                    {run ? (
+                      <button className="button secondary" onClick={() => setDetailModal({ type: "run", run })}>
+                        View Run
+                      </button>
+                    ) : null}
 
                     <div className="admin-approval-actions">
                       <button className="button primary" onClick={() => approveCompletion(item)}>
@@ -583,51 +645,8 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
               })}
             </div>
           ) : (
-            <p className="muted">No pending approvals.</p>
+            <p className="muted">No pending approvals. Items appear here when status is awaiting_approval.</p>
           )}
-        </section>
-      </div>
-    );
-  }
-
-  function renderLeaderboard() {
-    return (
-      <div className="admin-panel">
-        <div className="admin-leaderboard-actions">
-          <button
-            className="button primary"
-            onClick={() => downloadElementAsPng(leaderboardRef.current, "fingallians-leaderboard.png")}
-          >
-            Save Leaderboard Image
-          </button>
-        </div>
-
-        <section className="admin-leaderboard-card" ref={leaderboardRef}>
-          <div className="admin-leaderboard-header">
-            <img src="/fingallians-crest.png" alt="" />
-            <div>
-              <h2>Fingallians Fitness Challenge</h2>
-              <p>{displaySquad(adminSquad)} Leaderboard</p>
-            </div>
-          </div>
-
-          <div className="admin-leaderboard-list">
-            {leaderboard.map((row, index) => (
-              <div className={`admin-leaderboard-row rank-${index + 1}`} key={row.player.id}>
-                <span className="rank-number">{index + 1}</span>
-                <span className="rank-avatar">{initials(row.player.name)}</span>
-
-                <div>
-                  <strong>{row.player.name}</strong>
-                  <small>
-                    {displaySquad(row.player.squad_key)} · {row.completed} missions · {row.distance.toFixed(1)} km
-                  </small>
-                </div>
-
-                <em>{row.xp} XP</em>
-              </div>
-            ))}
-          </div>
         </section>
       </div>
     );
@@ -669,20 +688,16 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
             {filteredPlayers.map(player => {
               const playerXp = filteredXpRows
                 .filter(row => row.player_id === player.id)
-                .reduce((total, row) => total + number(row.xp), 0);
+                .reduce((sum, row) => sum + num(row.xp), 0);
 
               return (
-                <button
-                  key={player.id}
-                  className="admin-player-row"
-                  onClick={() => setSelectedPlayer(player)}
-                >
+                <button key={player.id} className="admin-player-row" onClick={() => setSelectedPlayer(player)}>
                   <span>{initials(player.name)}</span>
                   <div>
                     <strong>{player.name}</strong>
                     <small>{displaySquad(player.squad_key)} · {playerXp} XP</small>
                   </div>
-                  <em>View</em>
+                  <em>Manage</em>
                 </button>
               );
             })}
@@ -697,8 +712,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
   function renderPlayerDrawer(player) {
     const playerRuns = runs.filter(run => run.player_id === player.id);
     const playerCompletions = completions.filter(row => row.player_id === player.id);
-    const playerXpRows = xpRows.filter(row => row.player_id === player.id);
-    const playerXp = playerXpRows.reduce((total, row) => total + number(row.xp), 0);
+    const playerXp = xpRows
+      .filter(row => row.player_id === player.id)
+      .reduce((sum, row) => sum + num(row.xp), 0);
 
     return (
       <div className="admin-player-drawer">
@@ -715,23 +731,23 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
         </div>
 
         <div className="admin-adjust-card">
-          <h3>Add / Remove Points</h3>
+          <h3>Coach Actions</h3>
+
+          <button className="button primary" onClick={() => setCoachPlayer(player)}>
+            View / Edit as Player
+          </button>
 
           <form
             onSubmit={event => {
               event.preventDefault();
               const formData = new FormData(event.currentTarget);
-              addPoints(
-                player,
-                formData.get("xp"),
-                formData.get("reason")?.toString() || "Admin adjustment"
-              );
+              addPoints(player, formData.get("xp"), formData.get("reason") || "Admin adjustment");
               event.currentTarget.reset();
             }}
           >
-            <input className="input" name="xp" type="number" placeholder="e.g. 3 or -3" />
+            <input className="input" name="xp" type="number" placeholder="+3 or -3" />
             <input className="input" name="reason" placeholder="Reason" />
-            <button className="button primary">Save Points</button>
+            <button className="button secondary">Save Points</button>
           </form>
         </div>
 
@@ -743,13 +759,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
               <div className="admin-run-row" key={run.id}>
                 <div>
                   <strong>{run.label || "Run"}</strong>
-                  <small>
-                    {run.run_type} · {number(run.distance_km).toFixed(2)} km · {timeText(run.saved_at)}
-                  </small>
+                  <small>{run.run_type} · {num(run.distance_km).toFixed(2)} km · {dateTime(run.saved_at)}</small>
                 </div>
 
                 <button className="button secondary" onClick={() => setDetailModal({ type: "run", run })}>
-                  View Card
+                  View
                 </button>
               </div>
             ))
@@ -759,7 +773,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
         </div>
 
         <div className="admin-drawer-section">
-          <h3>Activity Log</h3>
+          <h3>Activity History</h3>
 
           {playerCompletions.length ? (
             playerCompletions.map(item => {
@@ -769,7 +783,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
                 <div className="admin-run-row" key={item.id}>
                   <div>
                     <strong>{activity.title || item.completion_type}</strong>
-                    <small>{item.status} · {timeText(item.completed_at)}</small>
+                    <small>{item.status} · {dateTime(item.completed_at)}</small>
                   </div>
 
                   {isPendingApproval(item) ? (
@@ -781,7 +795,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
               );
             })
           ) : (
-            <p className="muted">No activity logged.</p>
+            <p className="muted">No activity yet.</p>
           )}
         </div>
 
@@ -803,22 +817,33 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
               Week
               <select className="select" value={planWeek} onChange={event => setPlanWeek(event.target.value)}>
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(week => (
-                  <option key={week} value={week}>
-                    Week {week}
-                  </option>
+                  <option key={week} value={week}>Week {week}</option>
                 ))}
               </select>
             </label>
           </div>
 
-          <div className="admin-plan-list">
+          <div className="admin-plan-card-grid">
             {planActivities.map(activity => (
-              <div className="admin-plan-row" key={activity.id}>
+              <div className="admin-plan-card" key={activity.id}>
+                <span>
+                  {isRunActivity(activity)
+                    ? "🏃"
+                    : activity.activity_key === "football-skill"
+                      ? "⚽"
+                      : activity.activity_key === "hurling-skill"
+                        ? "🏑"
+                        : activity.activity_key === "bonus"
+                          ? "⭐"
+                          : "🎯"}
+                </span>
+
                 <div>
                   <strong>{activity.title}</strong>
-                  <small>
-                    {displaySquad(activity.squad_key)} · {activity.section} · {activity.activity_key}
-                  </small>
+                  <small>{displaySquad(activity.squad_key)} · {activity.section}</small>
+                  {activity.target_value ? (
+                    <em>{activity.target_value} {activity.target_unit}</em>
+                  ) : null}
                 </div>
 
                 <button className="button secondary" onClick={() => setEditingActivity(activity)}>
@@ -829,72 +854,102 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
           </div>
         </section>
 
-        {editingActivity ? (
-          <div className="admin-edit-backdrop" onClick={() => setEditingActivity(null)}>
-            <form
-              className="admin-edit-modal"
-              onClick={event => event.stopPropagation()}
-              onSubmit={event => {
-                event.preventDefault();
-                saveActivity(editingActivity, new FormData(event.currentTarget));
-              }}
-            >
-              <button className="admin-drawer-close" type="button" onClick={() => setEditingActivity(null)}>
-                ×
-              </button>
-
-              <h2>Edit Activity</h2>
-
-              <label className="label">Title</label>
-              <input className="input" name="title" defaultValue={editingActivity.title || ""} />
-
-              <label className="label">Section</label>
-              <input className="input" name="section" defaultValue={editingActivity.section || ""} />
-
-              <label className="label">YouTube ID</label>
-              <input className="input" name="youtube_id" defaultValue={editingActivity.youtube_id || ""} />
-
-              <label className="label">Skill Card Path</label>
-              <input className="input" name="skill_card_path" defaultValue={editingActivity.skill_card_path || ""} />
-
-              <label className="label">Target Value</label>
-              <input className="input" name="target_value" defaultValue={editingActivity.target_value || ""} />
-
-              <label className="label">Target Unit</label>
-              <input className="input" name="target_unit" defaultValue={editingActivity.target_unit || ""} />
-
-              <button className="button primary">Save Activity</button>
-            </form>
-          </div>
-        ) : null}
+        {editingActivity ? renderEditActivityModal() : null}
       </div>
     );
   }
 
-  function renderProgress() {
+  function renderEditActivityModal() {
+    return (
+      <div className="admin-edit-backdrop" onClick={() => setEditingActivity(null)}>
+        <form
+          className="admin-edit-modal"
+          onClick={event => event.stopPropagation()}
+          onSubmit={event => {
+            event.preventDefault();
+            saveActivity(editingActivity, new FormData(event.currentTarget));
+          }}
+        >
+          <button className="admin-drawer-close" type="button" onClick={() => setEditingActivity(null)}>
+            ×
+          </button>
+
+          <h2>Edit Activity</h2>
+
+          <label className="label">Title</label>
+          <input className="input" name="title" defaultValue={editingActivity.title || ""} />
+
+          <label className="label">Section</label>
+          <input className="input" name="section" defaultValue={editingActivity.section || ""} />
+
+          <label className="label">YouTube ID</label>
+          <input className="input" name="youtube_id" defaultValue={editingActivity.youtube_id || ""} />
+
+          <label className="label">Skill Card Path</label>
+          <input className="input" name="skill_card_path" defaultValue={editingActivity.skill_card_path || ""} />
+
+          <label className="label">Target Value</label>
+          <input className="input" name="target_value" defaultValue={editingActivity.target_value || ""} />
+
+          <label className="label">Target Unit</label>
+          <input className="input" name="target_unit" defaultValue={editingActivity.target_unit || ""} />
+
+          <button className="button primary">Save Activity</button>
+        </form>
+      </div>
+    );
+  }
+
+  function renderLeaderboard() {
     return (
       <div className="admin-panel">
-        <section className="admin-card">
-          <h2>Overall Squad Progress</h2>
+        <div className="admin-leaderboard-actions">
+          <button className="button primary" onClick={() => downloadNodeAsImage(leaderboardRef.current, "fingallians-leaderboard.png")}>
+            Save Leaderboard Image
+          </button>
+        </div>
 
-          <div className="admin-squad-progress-list">
-            {squadProgress.map(squad => (
-              <div className="admin-squad-progress-row" key={squad.key}>
+        <section className="admin-leaderboard-card" ref={leaderboardRef}>
+          <div className="admin-leaderboard-header">
+            <img src="/fingallians-crest.png" alt="" />
+            <div>
+              <h2>Fingallians Fitness Challenge</h2>
+              <p>{displaySquad(adminSquad)} Leaderboard</p>
+            </div>
+          </div>
+
+          <div className="admin-leaderboard-list">
+            {leaderboard.map((row, index) => (
+              <div className={`admin-leaderboard-row rank-${index + 1}`} key={row.player.id}>
+                <span className="rank-number">{index + 1}</span>
+                <span className="rank-avatar">{initials(row.player.name)}</span>
+
                 <div>
-                  <strong>{squad.label}</strong>
-                  <small>
-                    {squad.active}/{squad.players} active · {squad.completions} completions · {squad.runs} runs
-                  </small>
+                  <strong>{row.player.name}</strong>
+                  <small>{displaySquad(row.player.squad_key)} · {row.completed} missions · {row.distance.toFixed(1)} km</small>
                 </div>
 
-                <div className="admin-progress-track">
-                  <div style={{ width: `${squad.players ? Math.round((squad.active / squad.players) * 100) : 0}%` }} />
-                </div>
-
-                <em>{squad.distance.toFixed(1)} km</em>
+                <em>{row.xp} XP</em>
               </div>
             ))}
           </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderSettings() {
+    return (
+      <div className="admin-panel">
+        <section className="admin-card">
+          <h2>Admin Settings</h2>
+          <p className="muted">
+            Use All Squads for a club-wide view. Use a specific squad to filter all admin tools.
+          </p>
+
+          <button className="button secondary danger-button" onClick={onSignOut}>
+            Sign Out
+          </button>
         </section>
       </div>
     );
@@ -916,15 +971,15 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
             <div className="admin-run-proof-card">
               <span>🏃</span>
               <strong>{run.player_name}</strong>
-              <p>{number(run.distance_km).toFixed(2)} km · {run.duration_min || "—"} mins</p>
-              <small>{run.run_type} · {timeText(run.saved_at)}</small>
+              <p>{num(run.distance_km).toFixed(2)} km · {run.duration_min || "—"} mins</p>
+              <small>{run.run_type} · {dateTime(run.saved_at)}</small>
             </div>
 
             {run.share_image_url ? (
               <img className="admin-run-proof-image" src={run.share_image_url} alt="Run proof" />
             ) : (
               <p className="muted">
-                No uploaded screenshot image is stored yet. Showing run details from the saved run record.
+                No stored screenshot image yet. The run record is saved and can still be reviewed here.
               </p>
             )}
           </div>
@@ -962,28 +1017,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
         })),
         ...filteredRuns.map(row => ({
           main: row.player_name || playerById(row.player_id).name || "Unknown player",
-          sub: `${row.label || "Run"} · ${number(row.distance_km).toFixed(2)} km`,
+          sub: `${row.label || "Run"} · ${num(row.distance_km).toFixed(2)} km`,
         })),
       ];
-    }
-
-    if (detailModal === "childLinks") {
-      title = "Child Link / Registered Users";
-      rows = filteredTermsRows.map(row => ({
-        main: row.user_email || row.user_id,
-        sub: `${displaySquad(row.squad_key)} · ${dateText(row.accepted_at)}`,
-      }));
-    }
-
-    if (detailModal === "unregistered") {
-      title = "Not Yet Registered";
-      const registeredSquads = new Set(filteredTermsRows.map(row => row.squad_key));
-      rows = filteredPlayers
-        .filter(player => !registeredSquads.has(player.squad_key))
-        .map(player => ({
-          main: player.name,
-          sub: displaySquad(player.squad_key),
-        }));
     }
 
     return (
@@ -1010,43 +1046,113 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
     );
   }
 
-  function renderCurrentTab() {
-    if (loading) {
-      return <div className="admin-card">Loading admin dashboard…</div>;
-    }
+  function renderCoachMode() {
+    if (!coachPlayer) return null;
 
-    if (activeTab === "dashboard") return renderDashboard();
+    const playerCompletions = completions.filter(row => row.player_id === coachPlayer.id);
+    const playerRuns = runs.filter(row => row.player_id === coachPlayer.id);
+    const playerXp = xpRows
+      .filter(row => row.player_id === coachPlayer.id)
+      .reduce((sum, row) => sum + num(row.xp), 0);
+    const playerBadges = badges.filter(row => row.player_id === coachPlayer.id);
+
+    return (
+      <div className="coach-mode-backdrop" onClick={() => setCoachPlayer(null)}>
+        <div className="coach-mode-modal" onClick={event => event.stopPropagation()}>
+          <button className="admin-drawer-close" onClick={() => setCoachPlayer(null)}>×</button>
+
+          <div className="coach-mode-header">
+            <h2>Coach Mode</h2>
+            <p>{coachPlayer.name} · {displaySquad(coachPlayer.squad_key)}</p>
+          </div>
+
+          <ChallengeHome
+            supabase={supabase}
+            squadConfig={{
+              ...squadConfig,
+              key: coachPlayer.squad_key,
+              shortLabel: displaySquad(coachPlayer.squad_key),
+            }}
+            selectedPlayer={coachPlayer}
+            activeWeek={1}
+            onChangeWeek={() => {}}
+            savedRuns={playerRuns}
+            completions={playerCompletions}
+            xpTotal={playerXp}
+            badges={playerBadges}
+            onStartRun={activity => setRunActivity(activity)}
+            onDeleteManualRun={() => {}}
+            onToggleActivity={(activity, existingCompletion) =>
+              adminToggleActivity(activity, existingCompletion, coachPlayer)
+            }
+            onSubmitApproval={(activity, type) =>
+              adminSubmitApproval(activity, type, coachPlayer)
+            }
+          />
+
+          {runActivity ? (
+            <RunLoggerModal
+              activity={runActivity}
+              selectedPlayer={coachPlayer}
+              onClose={() => setRunActivity(null)}
+              onSaved={() => {
+                setRunActivity(null);
+                loadAdminData();
+              }}
+            />
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  function renderCurrentTab() {
+    if (loading) return <div className="admin-card">Loading admin dashboard…</div>;
+    if (activeTab === "overview") return renderOverview();
     if (activeTab === "approvals") return renderApprovals();
-    if (activeTab === "leaderboard") return renderLeaderboard();
     if (activeTab === "players") return renderPlayers();
     if (activeTab === "plans") return renderPlans();
-    if (activeTab === "progress") return renderProgress();
-
-    return renderDashboard();
+    if (activeTab === "leaderboard") return renderLeaderboard();
+    if (activeTab === "settings") return renderSettings();
+    return renderOverview();
   }
 
   return (
     <div className="admin-page">
       {toast ? <div className="app-toast">{toast}</div> : null}
 
-      <section className="admin-hero">
-        <div>
-          <p className="eyebrow">Admin</p>
-          <h1>Fingallians Fitness Challenge</h1>
+      <section className="admin-control-bar">
+        <div className="admin-control-title">
+          <img src="/fingallians-crest.png" alt="" />
+          <div>
+            <strong>Fingallians Fitness Challenge</strong>
+            <small>Admin Dashboard</small>
+          </div>
         </div>
 
-        <select
-          className="select admin-squad-select"
-          value={adminSquad}
-          disabled={!isSuperAdmin}
-          onChange={event => setAdminSquad(event.target.value)}
-        >
-          {visibleSquads.map(squad => (
-            <option key={squad.key} value={squad.key}>
-              {squad.label}
-            </option>
-          ))}
-        </select>
+        <div className="admin-control-actions">
+          <select
+            className="select admin-squad-select"
+            value={adminSquad}
+            disabled={!isSuperAdmin}
+            onChange={event => setAdminSquad(event.target.value)}
+          >
+            {visibleSquads.map(squad => (
+              <option key={squad.key} value={squad.key}>
+                {squad.label}
+              </option>
+            ))}
+          </select>
+
+          <button className="admin-bell-button" onClick={() => setActiveTab("approvals")}>
+            🔔
+            {pendingApprovals.length ? <em>{pendingApprovals.length}</em> : null}
+          </button>
+
+          <button className="admin-signout-link" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
       </section>
 
       <nav className="admin-tabs">
@@ -1068,6 +1174,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin }) {
 
       {renderCurrentTab()}
       {renderDetailModal()}
+      {renderCoachMode()}
     </div>
   );
 }
