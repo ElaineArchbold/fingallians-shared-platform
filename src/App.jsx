@@ -72,6 +72,9 @@ export default function App() {
   const canUseAdminSelector = isSuperAdmin && adminKeys.length > 1;
 
   async function signOut() {
+    const ok = window.confirm("Are you sure you want to sign out?");
+    if (!ok) return;
+
     await supabase.auth.signOut();
     setSelectedPlayerId("");
     setParentView("challenge");
@@ -81,6 +84,7 @@ export default function App() {
     setSelectedPlayerId("");
     setParentView("challenge");
     setSquadKey(next);
+    localStorage.setItem("lastSquadKey", next);
   }
 
   if (childMode) {
@@ -105,12 +109,12 @@ export default function App() {
     );
   }
 
-  if (
-    !authLoaded ||
-    (session && !rolesLoaded) ||
-    (session && !termsLoaded) ||
-    (session && !isAdmin && !playersLoaded)
-  ) {
+  const waitingForAuth = !authLoaded;
+  const waitingForRoles = Boolean(session && !rolesLoaded);
+  const waitingForTerms = Boolean(session && rolesLoaded && !isAdmin && !termsLoaded);
+  const waitingForPlayers = Boolean(session && rolesLoaded && !isAdmin && !playersLoaded);
+
+  if (waitingForAuth || waitingForRoles || waitingForTerms || waitingForPlayers) {
     return (
       <div className="app-shell">
         <div className="card">Loading…</div>
@@ -120,9 +124,9 @@ export default function App() {
 
   return (
     <>
-      <div className="app-shell">
+      <div className={isAdmin ? "app-shell admin-app-shell" : "app-shell"}>
         {session ? (
-          <div className="topbar">
+          <div className={isAdmin ? "topbar admin-topbar" : "topbar"}>
             <div className="topbar-brand">
               <img src="/fingallians-crest.png" alt="Fingallians crest" />
 
@@ -132,7 +136,7 @@ export default function App() {
             </div>
 
             {isAdmin ? (
-              <div className="topbar-actions">
+              <div className="topbar-actions admin-topbar-actions">
                 {canUseAdminSelector ? (
                   <select
                     className="select topbar-select"
@@ -148,17 +152,17 @@ export default function App() {
                 ) : null}
 
                 <button
-                  className="button secondary signout-button"
+                  className="admin-signout-link"
                   onClick={signOut}
                 >
-                  Sign Out
+                  Sign out
                 </button>
               </div>
             ) : null}
           </div>
         ) : null}
 
-        {session && !termsAccepted ? (
+        {session && !isAdmin && !termsAccepted ? (
           <TermsAndConditions
             supabase={supabase}
             session={session}
@@ -170,12 +174,7 @@ export default function App() {
         {!session ? (
           <AuthPanel
             supabase={supabase}
-            session={session}
             squadConfig={squadConfig}
-            onChangeSquad={next => {
-              setSquadKey(next);
-              localStorage.setItem("lastSquadKey", next);
-            }}
             squadKey={squadKey}
             onSelectSquad={next => {
               setSelectedPlayerId("");
@@ -184,9 +183,9 @@ export default function App() {
               localStorage.setItem("lastSquadKey", next);
             }}
           />
-        ) : !termsAccepted ? null : isAdmin ? (
+        ) : isAdmin ? (
           <AdminHome squadConfig={squadConfig} isSuperAdmin={isSuperAdmin} />
-        ) : (
+        ) : !termsAccepted ? null : (
           <ParentHome
             supabase={supabase}
             session={session}
@@ -202,7 +201,6 @@ export default function App() {
             parentView={parentView}
             onChangeParentView={setParentView}
             onSignOut={signOut}
-            termsAcceptedAt={termsAcceptedAt}
             termsAcceptedAt={termsAcceptedAt}
           />
         )}

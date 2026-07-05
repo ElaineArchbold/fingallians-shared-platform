@@ -1,18 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-const FEATURES = [
-  { icon: "🏃", title: "GPS Runs", text: "Track and save verified runs" },
-  { icon: "📈", title: "Progress", text: "Follow weekly challenge progress" },
-  { icon: "🏆", title: "Leaderboards", text: "Celebrate effort and consistency" },
-  { icon: "🛡️", title: "Admin Tools", text: "Squad dashboard and proof review" },
-];
+const REMEMBER_EMAIL_KEY = "fingalliansRememberedEmail";
 
-const SQUADS = [
-  { key: "2014-boys", label: "2014 Boys" },
-  { key: "2015-girls", label: "2015 Girls" },
-  { key: "2017-girls", label: "2017 Girls" },
-  { key: "2017-boys", label: "2017 Boys" },
-];
 export default function AuthPanel({
   supabase,
   squadConfig,
@@ -22,147 +11,211 @@ export default function AuthPanel({
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true);
+  useEffect(() => {
+    const remembered = localStorage.getItem(REMEMBER_EMAIL_KEY);
+
+    if (remembered) {
+      setEmail(remembered);
+      setRememberMe(true);
+    }
+  }, []);
+
+  function rememberEmailIfNeeded(value) {
+    if (rememberMe) {
+      localStorage.setItem(REMEMBER_EMAIL_KEY, value);
+    } else {
+      localStorage.removeItem(REMEMBER_EMAIL_KEY);
+    }
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
     setMessage("");
 
-    const authPayload = { email, password };
-    const result =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword(authPayload)
-        : await supabase.auth.signUp(authPayload);
+    const cleanEmail = email.trim().toLowerCase();
 
-   if (result.error) {
-  setMessage(result.error.message);
-} else {
-  if (mode === "signup") {
-    setMode("login");
-    setPassword("");
-    setMessage("Account created successfully. Please sign in.");
-  } else {
-    setMessage("Signed in.");
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    setLoading(false);
+
+    if (signInError) {
+      setError(signInError.message);
+      return;
+    }
+
+    rememberEmailIfNeeded(cleanEmail);
   }
-}
-    setBusy(false);
+
+  async function handleSignup(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
+
+    setLoading(false);
+
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+
+    rememberEmailIfNeeded(cleanEmail);
+    setMessage("Account created. Check your email if confirmation is required, then log in.");
+    setMode("login");
+  }
+
+  async function handleForgotPassword(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setLoading(false);
+      setError("Enter your email address first.");
+      return;
+    }
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      cleanEmail,
+      {
+        redirectTo: window.location.origin,
+      }
+    );
+
+    setLoading(false);
+
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+
+    setMessage("Password reset email sent. Check your inbox.");
   }
 
   return (
-    <div className="login-shell">
-      <section className="brand-panel">
-        <div className="brand-glow" />
-
-        <div className="crest-wrap">
+    <div className="auth-page">
+      <section className="auth-card">
+        <div className="auth-logo-wrap">
           <img src="/fingallians-crest.png" alt="Fingallians crest" />
         </div>
 
-        <div className="brand-copy">
-          <div className="eyebrow">Summer 2026</div>
-          <h1>Fingallians Fitness Challenge</h1>
-          <p>
-            One shared platform for parents, players, coaches and squad admins.
-          </p>
-        </div>
+        <p className="eyebrow">Fingallians</p>
+        <h1>Fitness Challenge</h1>
+        <p className="muted">
+          Log in to manage your child's weekly challenge.
+        </p>
 
-        <div className="feature-grid">
-          {FEATURES.map(feature => (
-            <div className="feature-card" key={feature.title}>
-              <div className="feature-icon">{feature.icon}</div>
-              <div>
-                <strong>{feature.title}</strong>
-                <span>{feature.text}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+        <label className="label">Squad</label>
+        <select
+          className="select"
+          value={squadKey}
+          onChange={event => onSelectSquad(event.target.value)}
+        >
+          <option value="2014-boys">2014 Boys</option>
+          <option value="2015-girls">2015 Girls</option>
+          <option value="2017-boys">2017 Boys</option>
+          <option value="2017-girls">2017 Girls</option>
+        </select>
 
-      <section className="login-panel">
-        <div className="login-heading">
-          <span>Step 1</span>
-          <h2>Select your squad</h2>
-
-          <div className="squad-grid" style={{ margin: "20px 0" }}>
-            {SQUADS.map(squad => (
-              <button
-                type="button"
-                key={squad.key}
-                className={
-                  squadKey === squad.key
-                    ? "button primary login-squad-button"
-                    : "button secondary login-squad-button"
-                }
-                onClick={() => onSelectSquad(squad.key)}
-              >
-                {squad.label}
-              </button>
-            ))}
-          </div>
-
-          <span>Step 2</span>
-          <h2>{mode === "login" ? "Sign in" : "Create account"}</h2>
-
-          <p>
-            Sign in as a Parent / Guardian, Admin or Super Admin.
-          </p>
-        </div>
-
-        <form onSubmit={submit} className="form">
+        <form
+          className="auth-form"
+          onSubmit={
+            mode === "signup"
+              ? handleSignup
+              : mode === "forgot"
+                ? handleForgotPassword
+                : handleLogin
+          }
+        >
           <label className="label">Email</label>
           <input
             className="input"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
             type="email"
+            value={email}
             autoComplete="email"
+            onChange={event => setEmail(event.target.value)}
             required
-            disabled={!squadKey}
           />
 
-          <label className="label">Password</label>
+          {mode !== "forgot" ? (
+            <>
+              <label className="label">Password</label>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                onChange={event => setPassword(event.target.value)}
+                required
+              />
+            </>
+          ) : null}
 
-          <div className="password-field">
-            <input
-              className="input"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              type={showPassword ? "text" : "password"}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-              disabled={!squadKey}
-            />
+          {mode !== "forgot" ? (
+            <label className="remember-row">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={event => setRememberMe(event.target.checked)}
+              />
+              <span>Remember me on this device</span>
+            </label>
+          ) : null}
 
-            <button
-              type="button"
-              className="password-toggle"
-              onClick={() => setShowPassword(!showPassword)}
-              disabled={!squadKey}
-            >
-              {showPassword ? "🙈" : "👁️"}
-            </button>
-          </div>
+          {error ? <p className="form-error">{error}</p> : null}
+          {message ? <p className="form-message">{message}</p> : null}
 
-          <button className="button primary" disabled={busy || !squadKey}>
-            {busy ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
+          <button className="button primary" disabled={loading}>
+            {loading
+              ? "Please wait…"
+              : mode === "signup"
+                ? "Create Account"
+                : mode === "forgot"
+                  ? "Send Reset Email"
+                  : "Log In"}
           </button>
         </form>
-        <button
-          className="link-button"
-          onClick={() => {
-            setMode(mode === "login" ? "signup" : "login");
-            setMessage("");
-          }}
-        >
-          {mode === "login"
-            ? "Need an account? Create one"
-            : "Already have an account? Sign in"}
-        </button>
 
-        {message && <div className="message">{message}</div>}
+        <div className="auth-link-row">
+          {mode !== "login" ? (
+            <button type="button" onClick={() => setMode("login")}>
+              Back to login
+            </button>
+          ) : (
+            <>
+              <button type="button" onClick={() => setMode("signup")}>
+                Create account
+              </button>
+
+              <button type="button" onClick={() => setMode("forgot")}>
+                Forgot password?
+              </button>
+            </>
+          )}
+        </div>
       </section>
     </div>
   );

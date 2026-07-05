@@ -50,6 +50,10 @@ export default function SettingsHome({
   const [addSquadKey, setAddSquadKey] = useState("");
   const [addPlayerId, setAddPlayerId] = useState("");
   const [showTerms, setShowTerms] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const whatsappLink = getSquadWhatsAppLink(squadConfig.key);
   const hasMultipleChildren = players.length > 1;
@@ -115,6 +119,37 @@ export default function SettingsHome({
 
     onChildLinked?.(player);
     setAddPlayerId("");
+  }
+
+  async function changePassword(event) {
+    event.preventDefault();
+    setPasswordMessage("");
+    setPasswordError("");
+
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      setPasswordError(error.message);
+      return;
+    }
+
+    setPasswordMessage("Password updated.");
+    setNewPassword("");
+    setTimeout(() => setShowPasswordModal(false), 900);
+  }
+
+  function confirmSignOut() {
+    const ok = window.confirm("Are you sure you want to sign out?");
+    if (!ok) return;
+
+    onSignOut?.();
   }
 
   return (
@@ -284,7 +319,11 @@ export default function SettingsHome({
         <h2>Account</h2>
 
         <div className="settings-card-content">
-          <button className="settings-row-button" type="button">
+          <button
+            className="settings-row-button"
+            type="button"
+            onClick={() => setShowPasswordModal(true)}
+          >
             <span>🔐 Change password</span>
             <strong>›</strong>
           </button>
@@ -310,11 +349,46 @@ export default function SettingsHome({
         <div className="settings-card-content">
           <p className="muted">Sign out of the parent app on this device.</p>
 
-          <button className="button secondary danger-button" onClick={onSignOut}>
+          <button className="button secondary danger-button" onClick={confirmSignOut}>
             Sign Out
           </button>
         </div>
       </section>
+
+      {showPasswordModal ? (
+        <div className="terms-modal-backdrop" onClick={() => setShowPasswordModal(false)}>
+          <form
+            className="password-modal"
+            onClick={event => event.stopPropagation()}
+            onSubmit={changePassword}
+          >
+            <button
+              type="button"
+              className="terms-modal-close"
+              onClick={() => setShowPasswordModal(false)}
+            >
+              ×
+            </button>
+
+            <h2>Change Password</h2>
+            <p className="muted">Enter a new password for your parent account.</p>
+
+            <label className="label">New password</label>
+            <input
+              className="input"
+              type="password"
+              value={newPassword}
+              onChange={event => setNewPassword(event.target.value)}
+              autoComplete="new-password"
+            />
+
+            {passwordError ? <p className="form-error">{passwordError}</p> : null}
+            {passwordMessage ? <p className="form-message">{passwordMessage}</p> : null}
+
+            <button className="button primary">Save Password</button>
+          </form>
+        </div>
+      ) : null}
 
       {showTerms ? (
         <div className="terms-modal-backdrop" onClick={() => setShowTerms(false)}>

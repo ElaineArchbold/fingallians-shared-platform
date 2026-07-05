@@ -386,7 +386,7 @@ export default function ProgressHome({
                   </div>
 
                   <small>
-                    Target across loaded weeks: {distanceTargetKm.toFixed(2)} km
+                    Challenge target: {distanceTargetKm.toFixed(2)} km
                   </small>
                 </div>
 
@@ -406,7 +406,7 @@ export default function ProgressHome({
                   </div>
 
                   <small>
-                    Target across loaded weeks: {speedTargetMinutes} mins
+                    Challenge target: {speedTargetMinutes} mins
                   </small>
                 </div>
 
@@ -426,7 +426,7 @@ export default function ProgressHome({
                   </div>
 
                   <small>
-                    Target across loaded weeks: {footballTargetMinutes} mins
+                    Challenge target: {footballTargetMinutes} mins
                   </small>
                 </div>
 
@@ -446,7 +446,7 @@ export default function ProgressHome({
                   </div>
 
                   <small>
-                    Target across loaded weeks: {hurlingTargetMinutes} mins
+                    Challenge target: {hurlingTargetMinutes} mins
                   </small>
                 </div>
               </div>
