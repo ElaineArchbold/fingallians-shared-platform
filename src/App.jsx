@@ -20,6 +20,34 @@ import TermsAndConditions from "./components/auth/TermsAndConditions";
 import ParentHome from "./components/parent/ParentHome";
 import AdminHome from "./components/admin/AdminHome";
 
+const SUPER_ADMIN_EMAILS = ["e.t.archbold@gmail.com"];
+
+
+function NavIcon({ name }) {
+  if (name === "home") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 10.6 12 3l9 7.6v9.1a1.3 1.3 0 0 1-1.3 1.3h-5.1v-6.2H9.4V21H4.3A1.3 1.3 0 0 1 3 19.7v-9.1Z" />
+      </svg>
+    );
+  }
+
+  if (name === "trophy") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 3h10v2h3a1 1 0 0 1 1 1v2.2a5.8 5.8 0 0 1-4.7 5.7A6.1 6.1 0 0 1 13 17.4V20h3.4a1 1 0 0 1 1 1v1H6.6v-1a1 1 0 0 1 1-1H11v-2.6a6.1 6.1 0 0 1-3.3-3.5A5.8 5.8 0 0 1 3 8.2V6a1 1 0 0 1 1-1h3V3Zm0 4H5v1.2a3.8 3.8 0 0 0 2.4 3.5A9 9 0 0 1 7 9V7Zm12 0h-2v2c0 1-.1 1.9-.4 2.7A3.8 3.8 0 0 0 19 8.2V7Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 12.2a4.7 4.7 0 1 0 0-9.4 4.7 4.7 0 0 0 0 9.4Zm0 2.1c-4.2 0-7.7 2.4-7.7 5.3V21h15.4v-1.4c0-2.9-3.5-5.3-7.7-5.3Z" />
+    </svg>
+  );
+}
+
+
 function getChildLinkParams() {
   const params = new URLSearchParams(window.location.search);
 
@@ -68,8 +96,16 @@ export default function App() {
 
   const adminKeys = adminSquadKeysForRoles(roles);
   const isSuperAdmin = isSuperAdminForSquad(roles, squadConfig);
-  const isAdmin = isAdminForSquad(roles, squadConfig);
-  const canUseAdminSelector = isSuperAdmin && adminKeys.length > 1;
+  const isEmailSuperAdmin = SUPER_ADMIN_EMAILS.includes(
+    String(session?.user?.email || "").toLowerCase()
+  );
+  const effectiveIsSuperAdmin = isSuperAdmin || isEmailSuperAdmin;
+  const isAdmin = isAdminForSquad(roles, squadConfig) || effectiveIsSuperAdmin;
+  const availableAdminKeys = effectiveIsSuperAdmin
+    ? ["2014-boys", "2015-girls", "2017-boys", "2017-girls"]
+    : adminKeys;
+
+  const canUseAdminSelector = effectiveIsSuperAdmin && availableAdminKeys.length > 1;
 
   async function signOut() {
     const ok = window.confirm("Are you sure you want to sign out?");
@@ -143,7 +179,7 @@ export default function App() {
                     value={squadKey}
                     onChange={e => changeSquad(e.target.value)}
                   >
-                    {adminKeys.map(key => (
+                    {availableAdminKeys.map(key => (
                       <option key={key} value={key}>
                         {key}
                       </option>
@@ -184,7 +220,7 @@ export default function App() {
             }}
           />
         ) : isAdmin ? (
-          <AdminHome squadConfig={squadConfig} isSuperAdmin={isSuperAdmin} onSignOut={signOut} />
+          <AdminHome squadConfig={squadConfig} isSuperAdmin={effectiveIsSuperAdmin} onSignOut={signOut} />
         ) : !termsAccepted ? null : (
           <ParentHome
             supabase={supabase}
@@ -212,7 +248,7 @@ export default function App() {
             className={parentView === "challenge" ? "active" : ""}
             onClick={() => setParentView("challenge")}
           >
-            <span>🏠</span>
+            <NavIcon name="home" />
             <small>Home</small>
           </button>
 
@@ -220,7 +256,7 @@ export default function App() {
             className={parentView === "progress" ? "active" : ""}
             onClick={() => setParentView("progress")}
           >
-            <span>📈</span>
+            <NavIcon name="trophy" />
             <small>Progress</small>
           </button>
 
@@ -228,7 +264,7 @@ export default function App() {
             className={parentView === "settings" ? "active" : ""}
             onClick={() => setParentView("settings")}
           >
-            <span>⚙️</span>
+            <NavIcon name="user" />
             <small>Settings</small>
           </button>
         </nav>

@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 
 const REMEMBER_EMAIL_KEY = "fingalliansRememberedEmail";
 
-export default function AuthPanel({
-  supabase,
-  squadConfig,
-  squadKey,
-  onSelectSquad,
-}) {
+export default function AuthPanel({ supabase, squadKey, onSelectSquad }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,15 +12,19 @@ export default function AuthPanel({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const remembered = localStorage.getItem(REMEMBER_EMAIL_KEY);
+    const rememberedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY);
 
-    if (remembered) {
-      setEmail(remembered);
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
       setRememberMe(true);
     }
   }, []);
 
-  function rememberEmailIfNeeded(value) {
+  function cleanEmail() {
+    return email.trim().toLowerCase();
+  }
+
+  function saveRememberedEmail(value) {
     if (rememberMe) {
       localStorage.setItem(REMEMBER_EMAIL_KEY, value);
     } else {
@@ -39,21 +38,21 @@ export default function AuthPanel({
     setError("");
     setMessage("");
 
-    const cleanEmail = email.trim().toLowerCase();
+    const loginEmail = cleanEmail();
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
       password,
     });
 
     setLoading(false);
 
-    if (signInError) {
-      setError(signInError.message);
+    if (loginError) {
+      setError(loginError.message);
       return;
     }
 
-    rememberEmailIfNeeded(cleanEmail);
+    saveRememberedEmail(loginEmail);
   }
 
   async function handleSignup(event) {
@@ -62,10 +61,10 @@ export default function AuthPanel({
     setError("");
     setMessage("");
 
-    const cleanEmail = email.trim().toLowerCase();
+    const signupEmail = cleanEmail();
 
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: cleanEmail,
+    const { error: signupError } = await supabase.auth.signUp({
+      email: signupEmail,
       password,
       options: {
         emailRedirectTo: window.location.origin,
@@ -74,14 +73,14 @@ export default function AuthPanel({
 
     setLoading(false);
 
-    if (signUpError) {
-      setError(signUpError.message);
+    if (signupError) {
+      setError(signupError.message);
       return;
     }
 
-    rememberEmailIfNeeded(cleanEmail);
-    setMessage("Account created. Check your email if confirmation is required, then log in.");
+    saveRememberedEmail(signupEmail);
     setMode("login");
+    setMessage("Account created. Check your email if confirmation is required, then log in.");
   }
 
   async function handleForgotPassword(event) {
@@ -90,16 +89,16 @@ export default function AuthPanel({
     setError("");
     setMessage("");
 
-    const cleanEmail = email.trim().toLowerCase();
+    const resetEmail = cleanEmail();
 
-    if (!cleanEmail) {
+    if (!resetEmail) {
       setLoading(false);
       setError("Enter your email address first.");
       return;
     }
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      cleanEmail,
+      resetEmail,
       {
         redirectTo: window.location.origin,
       }
@@ -115,33 +114,31 @@ export default function AuthPanel({
     setMessage("Password reset email sent. Check your inbox.");
   }
 
+  const heading =
+    mode === "signup"
+      ? "Create Account"
+      : mode === "forgot"
+        ? "Reset Password"
+        : "Fitness Challenge";
+
   return (
-    <div className="auth-page">
-      <section className="auth-card">
-        <div className="auth-logo-wrap">
+    <main className="fg-auth-screen">
+      <section className="fg-auth-card">
+        <div className="fg-auth-logo">
           <img src="/fingallians-crest.png" alt="Fingallians crest" />
         </div>
 
-        <p className="eyebrow">Fingallians</p>
-        <h1>Fitness Challenge</h1>
-        <p className="muted">
-          Log in to manage your child's weekly challenge.
+        <div className="fg-auth-kicker">Fingallians</div>
+        <h1>{heading}</h1>
+
+        <p className="fg-auth-subtitle">
+          {mode === "forgot"
+            ? "Enter your email and we'll send a reset link."
+            : "Log in to manage your child's weekly challenge."}
         </p>
 
-        <label className="label">Squad</label>
-        <select
-          className="select"
-          value={squadKey}
-          onChange={event => onSelectSquad(event.target.value)}
-        >
-          <option value="2014-boys">2014 Boys</option>
-          <option value="2015-girls">2015 Girls</option>
-          <option value="2017-boys">2017 Boys</option>
-          <option value="2017-girls">2017 Girls</option>
-        </select>
-
         <form
-          className="auth-form"
+          className="fg-auth-form"
           onSubmit={
             mode === "signup"
               ? handleSignup
@@ -150,9 +147,16 @@ export default function AuthPanel({
                 : handleLogin
           }
         >
-          <label className="label">Email</label>
+          <label>Squad</label>
+          <select value={squadKey} onChange={event => onSelectSquad(event.target.value)}>
+            <option value="2014-boys">2014 Boys</option>
+            <option value="2015-girls">2015 Girls</option>
+            <option value="2017-boys">2017 Boys</option>
+            <option value="2017-girls">2017 Girls</option>
+          </select>
+
+          <label>Email</label>
           <input
-            className="input"
             type="email"
             value={email}
             autoComplete="email"
@@ -162,33 +166,30 @@ export default function AuthPanel({
 
           {mode !== "forgot" ? (
             <>
-              <label className="label">Password</label>
+              <label>Password</label>
               <input
-                className="input"
                 type="password"
                 value={password}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 onChange={event => setPassword(event.target.value)}
                 required
               />
+
+              <label className="fg-remember-row">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={event => setRememberMe(event.target.checked)}
+                />
+                <span>Remember me on this device</span>
+              </label>
             </>
           ) : null}
 
-          {mode !== "forgot" ? (
-            <label className="remember-row">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={event => setRememberMe(event.target.checked)}
-              />
-              <span>Remember me on this device</span>
-            </label>
-          ) : null}
+          {error ? <p className="fg-form-error">{error}</p> : null}
+          {message ? <p className="fg-form-message">{message}</p> : null}
 
-          {error ? <p className="form-error">{error}</p> : null}
-          {message ? <p className="form-message">{message}</p> : null}
-
-          <button className="button primary" disabled={loading}>
+          <button className="fg-auth-submit" disabled={loading}>
             {loading
               ? "Please wait…"
               : mode === "signup"
@@ -199,12 +200,8 @@ export default function AuthPanel({
           </button>
         </form>
 
-        <div className="auth-link-row">
-          {mode !== "login" ? (
-            <button type="button" onClick={() => setMode("login")}>
-              Back to login
-            </button>
-          ) : (
+        <div className="fg-auth-links">
+          {mode === "login" ? (
             <>
               <button type="button" onClick={() => setMode("signup")}>
                 Create account
@@ -214,9 +211,13 @@ export default function AuthPanel({
                 Forgot password?
               </button>
             </>
+          ) : (
+            <button type="button" onClick={() => setMode("login")}>
+              Back to login
+            </button>
           )}
         </div>
       </section>
-    </div>
+    </main>
   );
 }

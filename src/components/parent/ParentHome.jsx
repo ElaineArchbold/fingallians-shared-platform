@@ -4,6 +4,7 @@ import ProgressHome from "./ProgressHome";
 import SettingsHome from "./SettingsHome";
 import RunLoggerModal from "./RunLoggerModal";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
+import { playCompleteDing } from "../../lib/sounds";
 
 const CURRENT_WEEK = 1;
 
@@ -35,7 +36,7 @@ function xpForActivity(activity, completionType = "activity") {
 
   if (activity?.activity_key === "fitness") return 2;
   if (activity?.activity_key === "squad-session") return 3;
-  if (activity?.activity_key === "bonus") return 0;
+  if (activity?.activity_key === "bonus") return 4;
 
   return 1;
 }
@@ -547,6 +548,7 @@ export default function ParentHome({
         gpsVerified: false,
         awardPoints: true,
       });
+      playCompleteDing();
     } catch (error) {
       alert(error.message);
     }
@@ -564,6 +566,7 @@ export default function ParentHome({
         gpsVerified: false,
         awardPoints: false,
       });
+      playCompleteDing();
     } catch (error) {
       alert(error.message);
     }
@@ -615,6 +618,7 @@ export default function ParentHome({
 
     await maybeAwardBadges(result.playerId);
     await refreshPlayerData(result.playerId);
+    playCompleteDing();
     return completion;
   }
 

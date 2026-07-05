@@ -6029,3 +6029,837 @@ body {
     font-size: 11px !important;
   }
 }
+
+
+/* =====================================================
+   Admin approval + selected squad details
+===================================================== */
+
+.admin-selected-squad-card {
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .16), transparent 32%),
+    white !important;
+}
+
+.admin-squad-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 11px;
+}
+
+.admin-squad-detail-grid div {
+  background: #fff8f8;
+  border: 1px solid #f0e1df;
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
+}
+
+.admin-squad-detail-grid strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 24px;
+}
+
+.admin-squad-detail-grid span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-squad-detail-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.admin-empty-help {
+  background: #fff8f8;
+  border: 1px dashed #f0c5c5;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.admin-empty-help small {
+  display: block;
+  color: var(--text-secondary);
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+@media (max-width: 560px) {
+  .admin-squad-detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-squad-detail-actions .button {
+    width: 100%;
+  }
+}
+
+
+/* =====================================================
+   Login + solid white footer icon polish
+===================================================== */
+
+.branded-auth-page,
+.auth-page {
+  min-height: calc(100vh - 90px);
+  display: grid;
+  place-items: center;
+  padding: 22px 0;
+}
+
+.branded-auth-card,
+.auth-card {
+  width: min(430px, calc(100vw - 28px)) !important;
+  padding: 22px !important;
+  border-radius: 26px !important;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .16), transparent 34%),
+    white !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 18px 40px rgba(120, 8, 18, .12) !important;
+}
+
+.auth-logo-wrap {
+  width: 78px !important;
+  height: 78px !important;
+  margin: 0 auto 12px !important;
+  display: grid;
+  place-items: center;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.auth-logo-wrap img {
+  width: 68px !important;
+  height: 68px !important;
+  object-fit: contain;
+  background: white !important;
+  border: 4px solid var(--fg-gold, #f7c948) !important;
+  border-radius: 999px !important;
+  padding: 4px !important;
+  box-shadow: 0 8px 18px rgba(0,0,0,.14) !important;
+}
+
+.auth-card h1 {
+  margin: 0;
+  text-align: center;
+  color: var(--fg-red-2, #a80d19) !important;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 28px !important;
+  line-height: 1.05;
+}
+
+.auth-card .eyebrow,
+.auth-card .muted {
+  text-align: center;
+}
+
+.auth-form {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.auth-link-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.auth-link-row button {
+  border: 0;
+  background: transparent;
+  color: var(--club-red);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+/* Footer: solid icon system */
+.bottom-nav {
+  background:
+    linear-gradient(135deg, var(--fg-red-1, #d81224), var(--fg-red-2, #a80d19) 58%, var(--fg-red-3, #700611)) !important;
+  border: 0 !important;
+  box-shadow: 0 -12px 30px rgba(120, 8, 18, .22) !important;
+}
+
+.bottom-nav button {
+  color: rgba(255,255,255,.88) !important;
+  background: transparent !important;
+  gap: 4px !important;
+}
+
+.bottom-nav button svg {
+  width: 25px;
+  height: 25px;
+  display: block;
+  fill: currentColor;
+}
+
+.bottom-nav button small {
+  color: currentColor !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-size: 10px !important;
+}
+
+.bottom-nav button.active {
+  color: var(--fg-gold, #f7c948) !important;
+  background: rgba(255,255,255,.08) !important;
+}
+
+.bottom-nav button.active::after {
+  content: "";
+  width: 22px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--fg-gold, #f7c948);
+  display: block;
+  margin-top: 2px;
+}
+
+.topbar svg,
+.admin-control-bar svg {
+  fill: white;
+}
+
+/* Keep child name as normal text, not a pill */
+.settings-player-title-row,
+.player-card .settings-player-title-row {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.child-name-switch {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+
+/* =====================================================
+   Approval status and sound feedback polish
+===================================================== */
+
+.status-approved,
+.approved-label {
+  color: #16843d;
+  font-weight: 900;
+}
+
+.admin-approval-card.approved,
+.activity-card.approved {
+  border-color: rgba(22, 132, 61, .22);
+  background: #f3fff6;
+}
+
+.button.primary:active,
+.fitness-pill:active,
+.skill-card-button:active {
+  transform: scale(.98);
+}
+
+
+/* =====================================================
+   Approval scope fix
+===================================================== */
+
+.admin-approval-card p {
+  font-weight: 900;
+  color: var(--club-red);
+}
+
+.approval-only-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+
+/* =====================================================
+   FINAL UI POLISH: branded login + compact progress snapshot
+===================================================== */
+
+/* Correct branded login */
+.branded-auth-page,
+.auth-page {
+  min-height: calc(100vh - 36px);
+  display: grid;
+  place-items: center;
+  padding: 20px 14px;
+}
+
+.branded-auth-card,
+.auth-card {
+  width: min(460px, 100%) !important;
+  padding: 24px 22px !important;
+  border-radius: 26px !important;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .16), transparent 34%),
+    #ffffff !important;
+  border: 1px solid rgba(90, 34, 34, .12) !important;
+  box-shadow: 0 22px 54px rgba(80, 24, 16, .14) !important;
+}
+
+.auth-logo-wrap {
+  width: 86px !important;
+  height: 86px !important;
+  border-radius: 24px !important;
+  margin: 0 auto 18px !important;
+  background: #fff8f8 !important;
+  border: 1px solid #f0d8d8 !important;
+  display: grid !important;
+  place-items: center !important;
+  box-shadow: none !important;
+}
+
+.auth-logo-wrap img {
+  width: 68px !important;
+  height: 68px !important;
+  object-fit: contain !important;
+  background: #ffffff !important;
+  border: 4px solid var(--fg-gold, #f7c948) !important;
+  border-radius: 999px !important;
+  padding: 4px !important;
+  box-shadow: 0 8px 18px rgba(0,0,0,.16) !important;
+}
+
+.auth-kicker {
+  width: fit-content;
+  margin: 0 auto 10px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #fff4cf;
+  border: 1px solid var(--fg-gold, #f7c948);
+  color: #d58a00;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.auth-card h1,
+.branded-auth-card h1 {
+  margin: 0;
+  text-align: center;
+  color: var(--fg-red-2, #a80d19) !important;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: clamp(30px, 6vw, 38px) !important;
+  line-height: 1.02;
+  letter-spacing: .01em;
+}
+
+.auth-subtitle {
+  margin: 16px auto 18px;
+  max-width: 330px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.auth-form {
+  display: grid;
+  gap: 9px;
+}
+
+.auth-form .label {
+  margin-top: 10px;
+}
+
+.auth-card .input,
+.auth-card .select {
+  min-height: 52px !important;
+  border-radius: 16px !important;
+  font-size: 16px !important;
+}
+
+.remember-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.auth-card .button.primary {
+  min-height: 52px !important;
+  margin-top: 4px;
+  border-radius: 16px !important;
+}
+
+.auth-link-row {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.auth-link-row button {
+  border: 0;
+  background: transparent;
+  color: var(--club-red);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+/* Progress snapshot: donut left, stats right on every screen */
+.mission-snapshot-card,
+.week-snapshot-card,
+.progress-snapshot-card {
+  padding: 18px !important;
+}
+
+.mission-snapshot-card h3,
+.week-snapshot-card h3,
+.progress-snapshot-card h3 {
+  margin-bottom: 14px !important;
+}
+
+.mission-snapshot-main,
+.week-snapshot-main,
+.progress-snapshot-main {
+  display: grid !important;
+  grid-template-columns: 150px 1fr !important;
+  gap: 18px !important;
+  align-items: center !important;
+  text-align: left !important;
+}
+
+.mission-progress-ring,
+.week-progress-ring,
+.progress-ring {
+  width: 138px !important;
+  height: 138px !important;
+  margin: 0 !important;
+  justify-self: center !important;
+}
+
+.mission-progress-ring-inner strong,
+.week-progress-ring-inner strong,
+.progress-ring-inner strong {
+  font-size: 28px !important;
+}
+
+.mission-progress-ring-inner span,
+.week-progress-ring-inner span,
+.progress-ring-inner span {
+  font-size: 11px !important;
+  line-height: 1.05 !important;
+}
+
+.mission-snapshot-stats,
+.week-snapshot-stats,
+.progress-snapshot-stats {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 9px !important;
+  align-content: center !important;
+  justify-items: stretch !important;
+  width: 100% !important;
+}
+
+.mission-snapshot-stats > div,
+.week-snapshot-stats > div,
+.progress-snapshot-stats > div,
+.snapshot-stat {
+  display: grid !important;
+  grid-template-columns: 42px 1fr !important;
+  gap: 9px !important;
+  align-items: center !important;
+  justify-content: stretch !important;
+  text-align: left !important;
+  min-width: 0 !important;
+}
+
+.mission-snapshot-stats .snapshot-icon,
+.week-snapshot-stats .snapshot-icon,
+.progress-snapshot-stats .snapshot-icon,
+.snapshot-stat > span:first-child,
+.mission-snapshot-stats > div > span:first-child {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 13px !important;
+  display: grid !important;
+  place-items: center !important;
+  background: #fff2d1 !important;
+  font-size: 20px !important;
+}
+
+.mission-snapshot-stats strong,
+.week-snapshot-stats strong,
+.progress-snapshot-stats strong,
+.snapshot-stat strong {
+  font-size: 22px !important;
+  line-height: 1 !important;
+  color: var(--text) !important;
+}
+
+.mission-snapshot-stats small,
+.week-snapshot-stats small,
+.progress-snapshot-stats small,
+.snapshot-stat small {
+  display: block !important;
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  color: var(--text-secondary) !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+}
+
+.mission-snapshot-foot,
+.week-snapshot-foot,
+.progress-snapshot-foot {
+  margin-top: 14px !important;
+  text-align: center !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+}
+
+/* Reduce week selector height */
+.week-nav-card {
+  padding: 12px 14px !important;
+  border-radius: 20px !important;
+}
+
+.week-nav-card h2,
+.week-nav-card strong {
+  margin: 0 !important;
+  font-size: clamp(20px, 5vw, 28px) !important;
+  line-height: 1.05 !important;
+}
+
+.week-nav-card p,
+.week-nav-card small {
+  margin: 4px 0 0 !important;
+  line-height: 1.15 !important;
+}
+
+.week-nav-card button {
+  width: 46px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  border-radius: 999px !important;
+}
+
+/* Mobile: keep two-column progress card */
+@media (max-width: 620px) {
+  .mission-snapshot-card,
+  .week-snapshot-card,
+  .progress-snapshot-card {
+    padding: 16px !important;
+  }
+
+  .mission-snapshot-main,
+  .week-snapshot-main,
+  .progress-snapshot-main {
+    grid-template-columns: 132px 1fr !important;
+    gap: 12px !important;
+    align-items: center !important;
+  }
+
+  .mission-progress-ring,
+  .week-progress-ring,
+  .progress-ring {
+    width: 122px !important;
+    height: 122px !important;
+  }
+
+  .mission-progress-ring-inner strong,
+  .week-progress-ring-inner strong,
+  .progress-ring-inner strong {
+    font-size: 24px !important;
+  }
+
+  .mission-progress-ring-inner span,
+  .week-progress-ring-inner span,
+  .progress-ring-inner span {
+    font-size: 10px !important;
+  }
+
+  .mission-snapshot-stats,
+  .week-snapshot-stats,
+  .progress-snapshot-stats {
+    gap: 8px !important;
+  }
+
+  .mission-snapshot-stats > div,
+  .week-snapshot-stats > div,
+  .progress-snapshot-stats > div,
+  .snapshot-stat {
+    grid-template-columns: 34px 1fr !important;
+    gap: 8px !important;
+  }
+
+  .mission-snapshot-stats .snapshot-icon,
+  .week-snapshot-stats .snapshot-icon,
+  .progress-snapshot-stats .snapshot-icon,
+  .snapshot-stat > span:first-child,
+  .mission-snapshot-stats > div > span:first-child {
+    width: 31px !important;
+    height: 31px !important;
+    border-radius: 11px !important;
+    font-size: 17px !important;
+  }
+
+  .mission-snapshot-stats strong,
+  .week-snapshot-stats strong,
+  .progress-snapshot-stats strong,
+  .snapshot-stat strong {
+    font-size: 19px !important;
+  }
+
+  .mission-snapshot-stats small,
+  .week-snapshot-stats small,
+  .progress-snapshot-stats small,
+  .snapshot-stat small {
+    font-size: 9.5px !important;
+  }
+
+  .mission-snapshot-foot,
+  .week-snapshot-foot,
+  .progress-snapshot-foot {
+    font-size: 13px !important;
+  }
+}
+
+@media (max-width: 370px) {
+  .mission-snapshot-main,
+  .week-snapshot-main,
+  .progress-snapshot-main {
+    grid-template-columns: 112px 1fr !important;
+  }
+
+  .mission-progress-ring,
+  .week-progress-ring,
+  .progress-ring {
+    width: 104px !important;
+    height: 104px !important;
+  }
+
+  .mission-progress-ring-inner strong,
+  .week-progress-ring-inner strong,
+  .progress-ring-inner strong {
+    font-size: 21px !important;
+  }
+}
+
+
+/* =====================================================
+   Home approval labels
+===================================================== */
+
+.squad-session-card .button:disabled,
+.bonus-card .button:disabled {
+  opacity: 1;
+}
+
+.squad-session-card .button.primary:disabled,
+.bonus-card .button.secondary:disabled {
+  background: linear-gradient(135deg, #16843d, #2f9e44) !important;
+  color: white !important;
+  border-color: rgba(22, 132, 61, .2) !important;
+}
+
+
+/* =====================================================
+   HARD LOGIN FIX - independent from old auth styles
+===================================================== */
+
+.fg-auth-screen {
+  min-height: calc(100vh - 24px);
+  width: 100%;
+  display: grid;
+  place-items: center;
+  padding: 22px 14px;
+}
+
+.fg-auth-card {
+  width: min(460px, 100%);
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .18), transparent 34%),
+    #ffffff;
+  border: 1px solid rgba(90, 34, 34, .12);
+  border-radius: 28px;
+  padding: 24px 22px;
+  box-shadow: 0 22px 54px rgba(80, 24, 16, .14);
+}
+
+.fg-auth-logo {
+  width: 86px;
+  height: 86px;
+  margin: 0 auto 18px;
+  border-radius: 24px;
+  background: #fff8f8;
+  border: 1px solid #f0d8d8;
+  display: grid;
+  place-items: center;
+}
+
+.fg-auth-logo img {
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  background: #ffffff;
+  border: 4px solid var(--fg-gold, #f7c948);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: 0 8px 18px rgba(0,0,0,.16);
+}
+
+.fg-auth-kicker {
+  width: fit-content;
+  margin: 0 auto 10px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #fff4cf;
+  border: 1px solid var(--fg-gold, #f7c948);
+  color: #d58a00;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.fg-auth-card h1 {
+  margin: 0;
+  text-align: center;
+  color: var(--fg-red-2, #a80d19);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: clamp(30px, 6vw, 38px);
+  line-height: 1.02;
+  letter-spacing: .01em;
+}
+
+.fg-auth-subtitle {
+  margin: 16px auto 18px;
+  max-width: 330px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.fg-auth-form {
+  display: grid;
+  gap: 9px;
+}
+
+.fg-auth-form label {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.fg-auth-form input:not([type="checkbox"]),
+.fg-auth-form select {
+  min-height: 52px;
+  width: 100%;
+  border-radius: 16px;
+  border: 2px solid #eadbd8;
+  background: white;
+  color: var(--text);
+  padding: 0 14px;
+  font-size: 16px;
+  outline: none;
+}
+
+.fg-auth-form input:not([type="checkbox"]):focus,
+.fg-auth-form select:focus {
+  border-color: var(--club-red);
+  box-shadow: 0 0 0 4px rgba(197, 20, 23, .12);
+}
+
+.fg-remember-row {
+  margin-top: 10px !important;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-secondary);
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+.fg-remember-row input {
+  width: 16px;
+  height: 16px;
+}
+
+.fg-auth-submit {
+  min-height: 52px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--fg-red-1, #d81224), var(--fg-red-2, #a80d19));
+  color: white;
+  font-weight: 900;
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(168, 13, 25, .22);
+}
+
+.fg-auth-submit:disabled {
+  opacity: .7;
+  cursor: wait;
+}
+
+.fg-auth-links {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.fg-auth-links button {
+  border: 0;
+  background: transparent;
+  color: var(--club-red);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.fg-form-error {
+  margin: 0;
+  color: var(--club-red);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.fg-form-message {
+  margin: 0;
+  color: #16843d;
+  font-size: 13px;
+  font-weight: 900;
+}

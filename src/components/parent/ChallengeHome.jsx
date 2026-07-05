@@ -218,6 +218,8 @@ export default function ChallengeHome({
 
   const squadPending = squadCompletion?.status === "awaiting_approval";
   const bonusPending = bonusCompletion?.status === "awaiting_approval";
+  const squadApproved = squadCompletion?.status === "completed";
+  const bonusApproved = bonusCompletion?.status === "completed";
 
   return (
     <div className="challenge-page">
@@ -483,9 +485,11 @@ export default function ChallengeHome({
               <span className="bonus-label">Team Mission</span>
               <h2 style={{ fontSize: 26 }}>🤝 Squad Session</h2>
               <p style={{ fontSize: 15, fontWeight: 700 }}>
-                {squadPending
-                  ? "Awaiting coach approval."
-                  : "Get together with 3–4 teammates and practise this week's drills."}
+                {squadApproved
+                  ? "Approved by coach."
+                  : squadPending
+                    ? "Awaiting coach approval."
+                    : "Get together with 3–4 teammates and practise this week's drills."}
               </p>
             </div>
 
@@ -495,10 +499,14 @@ export default function ChallengeHome({
           <div className="squad-session-body">
             <button
               className="button primary"
-              disabled={squadPending}
+              disabled={squadPending || squadApproved}
               onClick={() => submitForApproval(squadSession, "squad")}
             >
-              {squadPending ? "Awaiting Approval" : "Submit for Approval"}
+              {squadApproved
+                ? "Approved"
+                : squadPending
+                  ? "Awaiting Approval"
+                  : "Submit for Approval"}
             </button>
           </div>
 
@@ -548,17 +556,23 @@ export default function ChallengeHome({
           <h2>⭐ Friday Night Hurling</h2>
 
           <p>
-            {bonusPending
-              ? "Awaiting coach approval."
-              : "Submit your attendance for coach approval."}
+            {bonusApproved
+              ? "Approved by coach."
+              : bonusPending
+                ? "Awaiting coach approval."
+                : "Submit your attendance for coach approval."}
           </p>
 
           <button
             className="button secondary"
-            disabled={bonusPending}
+            disabled={bonusPending || bonusApproved}
             onClick={() => submitForApproval(bonus, "bonus")}
           >
-            {bonusPending ? "Awaiting Approval" : "Submit Attendance"}
+            {bonusApproved
+              ? "Approved"
+              : bonusPending
+                ? "Awaiting Approval"
+                : "Submit Attendance"}
           </button>
         </section>
       )}

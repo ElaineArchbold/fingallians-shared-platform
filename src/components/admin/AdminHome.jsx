@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
+import { playCompleteDing } from "../../lib/sounds";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
 
@@ -45,6 +46,17 @@ function isPendingApproval(completion) {
   return completion.status === "awaiting_approval";
 }
 
+function isApprovalType(completion) {
+  return ["squad_approval", "bonus_approval"].includes(completion.completion_type);
+}
+
+function statusLabel(status) {
+  if (status === "completed") return "Approved";
+  if (status === "awaiting_approval") return "Awaiting Approval";
+  if (status === "rejected") return "Rejected";
+  return status || "Not started";
+}
+
 function isRunActivity(activity) {
   const title = String(activity?.title || "").toLowerCase();
   return activity?.target_unit === "km" || title.includes("run") || activity?.gps_preferred;
@@ -67,8 +79,8 @@ function xpForActivity(activity, completionType = "activity") {
     return 2;
   }
 
-  if (activity?.activity_key === "squad-session") return 3;
-  if (activity?.activity_key === "bonus") return 0;
+  if (activity?.activity_key === "squad-session") return 4;
+  if (activity?.activity_key === "bonus") return 4;
 
   return 1;
 }
@@ -150,7 +162,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
     ...filteredRuns.map(row => row.player_id),
   ]);
 
-  const pendingApprovals = filteredCompletions.filter(isPendingApproval);
+  const pendingApprovals = filteredCompletions.filter(row => isPendingApproval(row) && isApprovalType(row));
 
   const leaderboard = filteredPlayers
     .map(player => {
@@ -212,6 +224,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
   const totalDistance = filteredRuns.reduce((sum, row) => sum + num(row.distance_km), 0);
   const totalXp = filteredXpRows.reduce((sum, row) => sum + num(row.xp), 0);
+
+  function selectedSquadStats() {
+    if (adminSquad === "all") return null;
+
+    return squadStats.find(squad => squad.key === adminSquad) || null;
+  }
+
 
   useEffect(() => {
     loadAdminData();
@@ -351,53 +370,101 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
   }
 
   async function approveCompletion(completion) {
+    if (!isApprovalType(completion)) {
+      alert("Only Squad Sessions and Friday Night Hurling need admin approval.");
+      return;
+    }
+
     const activity = activityById(completion.activity_id);
     const xp = xpForActivity(activity, completion.completion_type);
 
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from("activity_completions")
       .update({
         status: "completed",
-        approved_at: new Date().toISOString(),
       })
-      .eq("id", completion.id);
+      .eq("id", completion.id)
+      .eq("status", "awaiting_approval")
+      .in("completion_type", ["squad_approval", "bonus_approval"])
+      .select("id,status,completion_type");
 
     if (updateError) {
-      alert(updateError.message);
+      console.error("Approval update failed:", updateError);
+      alert(`Could not approve: ${updateError.message}`);
+      return;
+    }
+
+    if (!updatedRows?.length) {
+      alert("Could not approve this item. It may already be approved, or it is not a Squad Session/Friday Night Hurling approval.");
+      await loadAdminData();
+      return;
+    }
+
+    const { error: deleteXpError } = await supabase
+      .from("xp_transactions")
+      .delete()
+      .eq("player_id", completion.player_id)
+      .eq("activity_id", completion.activity_id);
+
+    if (deleteXpError) {
+      console.error("XP reset failed:", deleteXpError);
+      alert(`Approved, but could not reset XP: ${deleteXpError.message}`);
+      await loadAdminData();
       return;
     }
 
     if (xp) {
-      await supabase.from("xp_transactions").insert({
+      const { error: xpError } = await supabase.from("xp_transactions").insert({
         player_id: completion.player_id,
         activity_id: completion.activity_id,
-        activity_completion_id: completion.id,
         xp,
         reason: activity?.title || "Approved activity",
         source: completion.completion_type || "approval",
       });
+
+      if (xpError) {
+        console.error("XP insert failed:", xpError);
+        alert(`Approved, but could not award XP: ${xpError.message}`);
+        await loadAdminData();
+        return;
+      }
     }
 
-    showToast("Approved.");
-    loadAdminData();
+    showToast(`Approved${xp ? ` and awarded ${xp} XP` : ""}.`);
+    await loadAdminData();
   }
 
   async function rejectCompletion(completion) {
+    if (!isApprovalType(completion)) {
+      alert("Only Squad Sessions and Friday Night Hurling need admin approval.");
+      return;
+    }
+
     const ok = window.confirm("Reject and remove this pending item?");
     if (!ok) return;
 
-    const { error } = await supabase
+    const { data: deletedRows, error } = await supabase
       .from("activity_completions")
       .delete()
-      .eq("id", completion.id);
+      .eq("id", completion.id)
+      .eq("status", "awaiting_approval")
+      .in("completion_type", ["squad_approval", "bonus_approval"])
+      .select("id");
 
     if (error) {
-      alert(error.message);
+      console.error("Reject failed:", error);
+      alert(`Could not reject: ${error.message}`);
+      return;
+    }
+
+    if (!deletedRows?.length) {
+      alert("Could not reject this item. It may already be approved, or it is not a Squad Session/Friday Night Hurling approval.");
+      await loadAdminData();
       return;
     }
 
     showToast("Rejected.");
-    loadAdminData();
+    await loadAdminData();
   }
 
   async function saveActivity(activity, formData) {
@@ -573,6 +640,58 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
           </section>
         ) : null}
 
+        {adminSquad !== "all" && selectedSquadStats() ? (
+          <section className="admin-card admin-selected-squad-card">
+            <h2>{selectedSquadStats().label} Details</h2>
+
+            <div className="admin-squad-detail-grid">
+              <div>
+                <strong>{selectedSquadStats().registered}</strong>
+                <span>Players</span>
+              </div>
+
+              <div>
+                <strong>{selectedSquadStats().active}</strong>
+                <span>Active</span>
+              </div>
+
+              <div>
+                <strong>{selectedSquadStats().completions}</strong>
+                <span>Approved</span>
+              </div>
+
+              <div>
+                <strong>{selectedSquadStats().awaiting}</strong>
+                <span>Awaiting Approval</span>
+              </div>
+
+              <div>
+                <strong>{selectedSquadStats().runs}</strong>
+                <span>Runs</span>
+              </div>
+
+              <div>
+                <strong>{selectedSquadStats().distance.toFixed(1)} km</strong>
+                <span>Distance</span>
+              </div>
+            </div>
+
+            <div className="admin-squad-detail-actions">
+              <button className="button secondary" onClick={() => setActiveTab("players")}>
+                View Players
+              </button>
+
+              <button className="button secondary" onClick={() => setActiveTab("approvals")}>
+                View Approvals
+              </button>
+
+              <button className="button secondary" onClick={() => setActiveTab("leaderboard")}>
+                View Leaderboard
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         <section className="admin-card">
           <h2>Activity Feed</h2>
 
@@ -592,7 +711,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                       <small>
                         {item.run_type
                           ? `${item.label || "Run"} · ${num(item.distance_km).toFixed(2)} km`
-                          : `${activity?.title || item.completion_type} · ${item.status}`}
+                          : `${activity?.title || item.completion_type} · ${statusLabel(item.status)}`}
                       </small>
                     </div>
                     <em>{dateTime(item.completed_at || item.saved_at)}</em>
@@ -622,7 +741,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                   <div className="admin-approval-card" key={item.id}>
                     <div>
                       <strong>{player.name || "Unknown player"}</strong>
-                      <p>{activity.title || item.completion_type}</p>
+                      <p>
+                        {item.completion_type === "bonus_approval"
+                          ? "Friday Night Hurling"
+                          : "Squad Session"}
+                      </p>
                       <small>{displaySquad(player.squad_key)} · {dateTime(item.completed_at)}</small>
                     </div>
 
@@ -646,7 +769,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
               })}
             </div>
           ) : (
-            <p className="muted">No pending approvals. Items appear here when status is awaiting_approval.</p>
+            <div className="admin-empty-help">
+              <p className="muted">No pending approvals. Items appear here when status is awaiting_approval.</p>
+              <small>
+                Test it by submitting Squad Session or Friday Night Hurling from a parent/child account.
+              </small>
+            </div>
           )}
         </section>
       </div>
@@ -784,7 +912,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                 <div className="admin-run-row" key={item.id}>
                   <div>
                     <strong>{activity.title || item.completion_type}</strong>
-                    <small>{item.status} · {dateTime(item.completed_at)}</small>
+                    <small>{statusLabel(item.status)} · {dateTime(item.completed_at)}</small>
                   </div>
 
                   {isPendingApproval(item) ? (
@@ -1014,7 +1142,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
       rows = [
         ...filteredCompletions.map(row => ({
           main: playerById(row.player_id).name || "Unknown player",
-          sub: `${activityById(row.activity_id).title || row.completion_type} · ${row.status}`,
+          sub: `${activityById(row.activity_id).title || row.completion_type} · ${statusLabel(row.status)}`,
         })),
         ...filteredRuns.map(row => ({
           main: row.player_name || playerById(row.player_id).name || "Unknown player",

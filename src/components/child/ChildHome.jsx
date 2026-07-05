@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
+import { playCompleteDing } from "../../lib/sounds";
 
 const CURRENT_WEEK = 1;
 
@@ -281,7 +282,8 @@ export default function ChildHome({ supabase, squadConfig, childToken }) {
       }
 
       await removeXpForActivity(player.id, activity.id);
-      await refreshPlayerData(player.id);
+      playCompleteDing();
+    await refreshPlayerData(player.id);
       return;
     }
 
@@ -382,7 +384,8 @@ export default function ChildHome({ supabase, squadConfig, childToken }) {
         .eq("completion_type", "manual");
 
       await removeXpForActivity(player.id, run.task_key);
-      await refreshPlayerData(player.id);
+      playCompleteDing();
+    await refreshPlayerData(player.id);
     }
   }
 
