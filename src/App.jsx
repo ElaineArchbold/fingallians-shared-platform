@@ -101,12 +101,17 @@ export default function App() {
   const isEmailSuperAdmin = SUPER_ADMIN_EMAILS.includes(userEmail);
   const isTestSquadAdmin = TEST_SQUAD_ADMIN_EMAILS.includes(userEmail);
   const effectiveIsSuperAdmin = isSuperAdmin || isEmailSuperAdmin;
-  const availableAdminKeys = effectiveIsSuperAdmin || isTestSquadAdmin
-    ? ["2014-boys", "2015-girls", "2017-boys", "2017-girls"]
-    : adminKeys;
-  const isAdmin = isAdminForSquad(roles, squadConfig) || effectiveIsSuperAdmin || isTestSquadAdmin;
 
-  const canUseAdminSelector = (effectiveIsSuperAdmin || isTestSquadAdmin) && availableAdminKeys.length > 1;
+  // Super admin can see All Squads and switch squads.
+  // Normal/test squad admins only see the single selected squad dashboard.
+  const availableAdminKeys = effectiveIsSuperAdmin
+    ? ["2014-boys", "2015-girls", "2017-boys", "2017-girls"]
+    : isTestSquadAdmin
+      ? [squadKey]
+      : adminKeys;
+
+  const isAdmin = isAdminForSquad(roles, squadConfig) || effectiveIsSuperAdmin || isTestSquadAdmin;
+  const canUseAdminSelector = effectiveIsSuperAdmin && availableAdminKeys.length > 1;
 
   async function signOut() {
     const ok = window.confirm("Are you sure you want to sign out?");

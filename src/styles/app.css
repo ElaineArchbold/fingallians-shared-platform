@@ -7587,3 +7587,30 @@ body {
 .admin-plan-card .button {
   align-self: center;
 }
+
+
+/* Child/admin fixes */
+.child-home-page .week-nav-card {
+  display: grid !important;
+  grid-template-columns: 46px 1fr 46px !important;
+  align-items: center !important;
+}
+
+.child-home-page .week-nav-card button {
+  display: grid !important;
+  place-items: center !important;
+  opacity: 1;
+}
+
+.admin-squad-label {
+  min-height: 46px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.24);
+  color: white;
+  display: grid;
+  place-items: center;
+  padding: 0 14px;
+  font-weight: 900;
+  white-space: nowrap;
+}
