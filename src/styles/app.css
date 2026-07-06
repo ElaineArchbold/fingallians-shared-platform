@@ -7614,3 +7614,32 @@ body {
   font-weight: 900;
   white-space: nowrap;
 }
+
+
+/* Admin manual run mode */
+.admin-manual-run-note {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff4cf;
+  color: #8a5a00;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.coach-mode-modal .fitness-pill {
+  cursor: pointer;
+}
+
+
+/* Kids-only locked future week arrow */
+.week-nav-disabled {
+  opacity: .38 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.week-nav-disabled:hover {
+  transform: none !important;
+}

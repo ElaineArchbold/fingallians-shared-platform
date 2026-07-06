@@ -71,6 +71,7 @@ export default function RunLoggerModal({
   selectedPlayer,
   onClose,
   onSaved,
+  manualOnly = false,
 }) {
   const [mode, setMode] = useState("gps");
   const [tracking, setTracking] = useState(false);

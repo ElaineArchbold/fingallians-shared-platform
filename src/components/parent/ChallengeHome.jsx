@@ -95,6 +95,7 @@ export default function ChallengeHome({
   onSwitchChild,
   activeWeek = getCurrentChallengeWeek(),
   currentWeek = getCurrentChallengeWeek(),
+  lockFutureWeeks = false,
   onChangeWeek,
   savedRuns = [],
   completions = [],
@@ -104,6 +105,7 @@ export default function ChallengeHome({
   onDeleteManualRun,
   onToggleActivity,
   onSubmitApproval,
+  adminManualRuns = false,
 }) {
   const [toast, setToast] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
@@ -112,7 +114,11 @@ export default function ChallengeHome({
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
 
-  const safeWeek = Math.min(Number(activeWeek || currentWeek), currentWeek);
+  const safeWeek = lockFutureWeeks
+    ? Math.min(Number(activeWeek || currentWeek), currentWeek)
+    : Math.max(1, Number(activeWeek || currentWeek));
+
+  const nextWeekLocked = lockFutureWeeks && safeWeek >= currentWeek;
 
   const { activities, activitiesLoaded } = useWeeklyActivities(
     supabase,
@@ -285,8 +291,12 @@ export default function ChallengeHome({
         </div>
 
         <button
-          disabled={safeWeek >= currentWeek}
-          onClick={() => onChangeWeek?.(safeWeek + 1)}
+          disabled={nextWeekLocked}
+          className={nextWeekLocked ? "week-nav-disabled" : ""}
+          onClick={() => {
+            if (nextWeekLocked) return;
+            onChangeWeek?.(safeWeek + 1);
+          }}
         >
           ›
         </button>
@@ -368,6 +378,11 @@ export default function ChallengeHome({
                 onClick={() => {
                   if (savedRun) {
                     setSelectedRunProof(savedRun);
+                    return;
+                  }
+
+                  if (run && adminManualRuns) {
+                    openRunLogger(item);
                     return;
                   }
 

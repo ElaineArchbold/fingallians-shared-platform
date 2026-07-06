@@ -652,7 +652,7 @@ export default function ParentHome({
   }
 
   function openWeekFromProgress(week) {
-    setChallengeWeek(clampChallengeWeek(week, currentWeek));
+    setChallengeWeek(Math.min(8, Math.max(1, Number(week || currentWeek))));
     onChangeParentView("challenge");
   }
 
@@ -819,6 +819,7 @@ export default function ParentHome({
         onSwitchChild={() => setShowChildSwitcher(true)}
         activeWeek={challengeWeek}
         currentWeek={currentWeek}
+        lockFutureWeeks={false}
         onChangeWeek={setChallengeWeek}
         savedRuns={savedRuns}
         completions={completions}

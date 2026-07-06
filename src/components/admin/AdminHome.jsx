@@ -1348,6 +1348,95 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
+  async function adminHandleRunSaved(result, player) {
+    if (!player?.id) return false;
+
+    const activity = activityById(result.activityId) || {
+      id: result.activityId,
+      title: result.title,
+      activity_key: "fitness",
+      target_unit: "km",
+    };
+
+    const { data: completion, error: completionError } = await supabase
+      .from("activity_completions")
+      .upsert(
+        {
+          player_id: player.id,
+          activity_id: result.activityId,
+          status: "completed",
+          completion_type: result.type,
+          gps_verified: result.type === "gps",
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "player_id,activity_id" }
+      )
+      .select()
+      .single();
+
+    if (completionError) {
+      alert(completionError.message);
+      return false;
+    }
+
+    const { error: runError } = await supabase.from("run_proofs").insert({
+      squad: displaySquad(player.squad_key),
+      squad_key: player.squad_key,
+      player_id: player.id,
+      player_name: player.name,
+      task_key: result.activityId,
+      week: 1,
+      label: result.title,
+      target: result.targetKm ? `${result.targetKm} km` : null,
+      run_type: result.type,
+      distance_km: result.distanceKm,
+      duration_min: result.durationMin,
+      pace_min_per_km:
+        result.distanceKm > 0 && result.durationMin
+          ? Number((result.durationMin / result.distanceKm).toFixed(2))
+          : null,
+      note: result.type === "gps" ? "Verified GPS run added by admin" : "Manual run entry added by admin",
+      saved_at: result.savedAt || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      has_screenshot: false,
+      share_image_url: null,
+    });
+
+    if (runError) {
+      alert(runError.message);
+      return false;
+    }
+
+    const xp = xpForActivity(activity, result.type);
+
+    await supabase
+      .from("xp_transactions")
+      .delete()
+      .eq("player_id", player.id)
+      .eq("activity_id", result.activityId);
+
+    if (xp) {
+      const { error: xpError } = await supabase.from("xp_transactions").insert({
+        player_id: player.id,
+        activity_id: result.activityId,
+        activity_completion_id: completion?.id || null,
+        xp,
+        reason: result.title || activity.title || "Run added by admin",
+        source: result.type || "admin_run",
+      });
+
+      if (xpError) {
+        alert(xpError.message);
+        return false;
+      }
+    }
+
+    await loadAdminData();
+    showToast(`Run saved${xp ? ` (+${xp} XP)` : ""}.`);
+    return true;
+  }
+
   function renderCoachMode() {
     if (!coachPlayer) return null;
 
@@ -1384,6 +1473,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
             xpTotal={playerXp}
             badges={playerBadges}
             onStartRun={activity => setRunActivity(activity)}
+            adminManualRuns={true}
             onDeleteManualRun={() => {}}
             onToggleActivity={async (activity, existingCompletion) => {
               const saved = await adminToggleActivity(activity, existingCompletion, coachPlayer);
@@ -1398,10 +1488,14 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
             <RunLoggerModal
               activity={runActivity}
               selectedPlayer={coachPlayer}
+              manualOnly={true}
               onClose={() => setRunActivity(null)}
-              onSaved={() => {
-                setRunActivity(null);
-                loadAdminData();
+              onSaved={async result => {
+                const saved = await adminHandleRunSaved(result, coachPlayer);
+                if (saved) {
+                  setRunActivity(null);
+                  setCoachRefreshKey(current => current + 1);
+                }
               }}
             />
           ) : null}
@@ -1435,18 +1529,21 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         </div>
 
         <div className="admin-control-actions">
-          <select
-            className="select admin-squad-select"
-            value={adminSquad}
-            disabled={visibleSquads.length <= 1}
-            onChange={event => setAdminSquad(event.target.value)}
-          >
-            {visibleSquads.map(squad => (
-              <option key={squad.key} value={squad.key}>
-                {squad.label}
-              </option>
-            ))}
-          </select>
+          {isSuperAdmin ? (
+            <select
+              className="select admin-squad-select"
+              value={adminSquad}
+              onChange={event => setAdminSquad(event.target.value)}
+            >
+              {visibleSquads.map(squad => (
+                <option key={squad.key} value={squad.key}>
+                  {squad.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="admin-squad-label">{displaySquad(adminSquad)}</div>
+          )}
 
           <button className="admin-bell-button admin-icon-button" onClick={() => setActiveTab("approvals")} aria-label="Approvals">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.7 2.7 0 0 0 2.6-2h-5.2A2.7 2.7 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
