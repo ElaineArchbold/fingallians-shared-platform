@@ -281,7 +281,7 @@ export default function ChallengeHome({
 
         <div>
           <strong>Week {safeWeek}</strong>
-          <span>{safeWeek === currentWeek ? "Current week" : "Previous week"}</span>
+          <span>{safeWeek === currentWeek ? "Current week" : `Week ${safeWeek}`}</span>
         </div>
 
         <button

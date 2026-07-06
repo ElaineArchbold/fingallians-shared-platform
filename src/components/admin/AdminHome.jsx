@@ -57,6 +57,16 @@ function statusLabel(status) {
   return status || "Not started";
 }
 
+function planSortWeight(activity) {
+  if (isRunActivity(activity)) return 10;
+  if (activity?.activity_key === "running-technique") return 20;
+  if (activity?.activity_key === "football-skill") return 30;
+  if (activity?.activity_key === "hurling-skill") return 40;
+  if (activity?.activity_key === "squad-session") return 50;
+  if (activity?.activity_key === "bonus") return 60;
+  return 70;
+}
+
 function isRunActivity(activity) {
   const title = String(activity?.title || "").toLowerCase();
   return activity?.target_unit === "km" || title.includes("run") || activity?.gps_preferred;
@@ -150,9 +160,9 @@ async function downloadNodeAsImage(node, filename) {
   window.print();
 }
 
-export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
+export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = [], onSignOut }) {
   const [activeTab, setActiveTab] = useState("overview");
-  const [adminSquad, setAdminSquad] = useState(isSuperAdmin ? "all" : squadConfig.key);
+  const [adminSquad, setAdminSquad] = useState(isSuperAdmin ? "all" : (adminSquadKeys[0] || squadConfig.key));
   const [loading, setLoading] = useState(true);
   const [players, setPlayers] = useState([]);
   const [completions, setCompletions] = useState([]);
@@ -172,7 +182,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
   const leaderboardRef = useRef(null);
 
-  const visibleSquads = isSuperAdmin ? SQUADS : SQUADS.filter(item => item.key === squadConfig.key);
+  const visibleSquads = isSuperAdmin
+    ? SQUADS
+    : SQUADS.filter(item => item.key !== "all" && (adminSquadKeys.length ? adminSquadKeys.includes(item.key) : item.key === squadConfig.key));
 
   const filteredPlayers = useMemo(() => {
     if (adminSquad === "all") return players;
@@ -250,7 +262,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
   const planActivities = activities
     .filter(activity => adminSquad === "all" || activity.squad_key === adminSquad)
     .filter(activity => Number(activity.week_number || 1) === Number(planWeek))
-    .sort((a, b) => `${a.squad_key}-${a.section}-${a.title}`.localeCompare(`${b.squad_key}-${b.section}-${b.title}`));
+    .sort((a, b) =>
+      planSortWeight(a) - planSortWeight(b) ||
+      Number(a.sort_order || 0) - Number(b.sort_order || 0) ||
+      String(a.title || "").localeCompare(String(b.title || ""))
+    );
 
   const totalDistance = filteredRuns.reduce((sum, row) => sum + num(row.distance_km), 0);
   const totalXp = filteredXpRows.reduce((sum, row) => sum + num(row.xp), 0);
@@ -498,11 +514,15 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
   }
 
   async function saveActivity(activity, formData) {
+    const ok = window.confirm("Are you sure you want to save these plan changes?");
+    if (!ok) return;
+
     const updates = {
       title: formData.get("title")?.toString() || activity.title,
       section: formData.get("section")?.toString() || activity.section,
       youtube_id: formData.get("youtube_id")?.toString() || null,
       skill_card_path: formData.get("skill_card_path")?.toString() || null,
+      skill_card_title: formData.get("skill_card_title")?.toString() || null,
       target_value: formData.get("target_value")?.toString() || null,
       target_unit: formData.get("target_unit")?.toString() || null,
     };
@@ -519,7 +539,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
     setEditingActivity(null);
     showToast("Plan updated.");
-    loadAdminData();
+    await loadAdminData();
   }
 
   async function adminToggleActivity(activity, existingCompletion, player) {
@@ -537,16 +557,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
         return false;
       }
 
-      const { error: xpDeleteError } = await supabase
+      await supabase
         .from("xp_transactions")
         .delete()
         .eq("player_id", player.id)
         .eq("activity_id", activity.id);
-
-      if (xpDeleteError) {
-        alert(xpDeleteError.message);
-        return false;
-      }
 
       await loadAdminData();
       showToast("Activity removed.");
@@ -555,14 +570,18 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
     const { data, error } = await supabase
       .from("activity_completions")
-      .insert({
-        player_id: player.id,
-        activity_id: activity.id,
-        status: "completed",
-        completion_type: "admin_activity",
-        gps_verified: false,
-        completed_at: new Date().toISOString(),
-      })
+      .upsert(
+        {
+          player_id: player.id,
+          activity_id: activity.id,
+          status: "completed",
+          completion_type: "admin_activity",
+          gps_verified: false,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "player_id,activity_id" }
+      )
       .select()
       .single();
 
@@ -572,6 +591,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
     }
 
     const xp = xpForActivity(activity, "admin_activity");
+
+    await supabase
+      .from("xp_transactions")
+      .delete()
+      .eq("player_id", player.id)
+      .eq("activity_id", activity.id);
 
     if (xp) {
       const { error: xpError } = await supabase.from("xp_transactions").insert({
@@ -988,15 +1013,15 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
               type="button"
               className="admin-info-pill"
               onClick={() =>
-                alert("Coming soon: full plan editing from the admin dashboard. For now this preview shows the activities loaded from weekly_activities. Use Supabase for launch-critical changes.")
+                alert("Edit the current weekly plan here. The cards are shown in the same order players see them: runs, speed, football, hurling/camogie, squad session, bonus. Click Edit, update the fields, then Save. You will be asked to confirm before the change is written.")
               }
             >
-              ⓘ Coming soon
+              ⓘ How to edit
             </button>
           </div>
 
           <p className="muted admin-plan-note">
-            Preview weekly activities here. Full safe editing/versioning will be added before launch.
+            Displayed in player order. Click Edit to change titles, targets, videos or skill cards.
           </p>
 
           <div className="admin-plan-toolbar">
@@ -1033,13 +1058,8 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                   ) : null}
                 </div>
 
-                <button
-                  className="button secondary"
-                  onClick={() =>
-                    alert("Plan editing is coming soon. Use Supabase weekly_activities for now if you need a real change.")
-                  }
-                >
-                  Info
+                <button className="button secondary" onClick={() => setEditingActivity(activity)}>
+                  Edit
                 </button>
               </div>
             ))}
@@ -1077,6 +1097,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
           <label className="label">YouTube ID</label>
           <input className="input" name="youtube_id" defaultValue={editingActivity.youtube_id || ""} />
 
+          <label className="label">Skill Card Title</label>
+          <input className="input" name="skill_card_title" defaultValue={editingActivity.skill_card_title || ""} />
+
           <label className="label">Skill Card Path</label>
           <input className="input" name="skill_card_path" defaultValue={editingActivity.skill_card_path || ""} />
 
@@ -1086,7 +1109,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
           <label className="label">Target Unit</label>
           <input className="input" name="target_unit" defaultValue={editingActivity.target_unit || ""} />
 
-          <button className="button primary">Save Activity</button>
+          <button className="button primary">Save</button>
         </form>
       </div>
     );
@@ -1415,7 +1438,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
           <select
             className="select admin-squad-select"
             value={adminSquad}
-            disabled={!isSuperAdmin}
+            disabled={visibleSquads.length <= 1}
             onChange={event => setAdminSquad(event.target.value)}
           >
             {visibleSquads.map(squad => (

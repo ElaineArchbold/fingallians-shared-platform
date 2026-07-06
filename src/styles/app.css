@@ -7573,3 +7573,17 @@ body {
     flex-direction: column;
   }
 }
+
+
+/* Admin plan editor save polish */
+.admin-edit-modal .button.primary {
+  margin-top: 10px;
+}
+
+.admin-plan-card {
+  align-items: start !important;
+}
+
+.admin-plan-card .button {
+  align-self: center;
+}

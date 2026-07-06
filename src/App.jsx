@@ -21,6 +21,7 @@ import ParentHome from "./components/parent/ParentHome";
 import AdminHome from "./components/admin/AdminHome";
 
 const SUPER_ADMIN_EMAILS = ["e.t.archbold@gmail.com"];
+const TEST_SQUAD_ADMIN_EMAILS = ["e.t.archbold+admin@gmail.com"];
 
 
 function NavIcon({ name }) {
@@ -96,16 +97,16 @@ export default function App() {
 
   const adminKeys = adminSquadKeysForRoles(roles);
   const isSuperAdmin = isSuperAdminForSquad(roles, squadConfig);
-  const isEmailSuperAdmin = SUPER_ADMIN_EMAILS.includes(
-    String(session?.user?.email || "").toLowerCase()
-  );
+  const userEmail = String(session?.user?.email || "").toLowerCase();
+  const isEmailSuperAdmin = SUPER_ADMIN_EMAILS.includes(userEmail);
+  const isTestSquadAdmin = TEST_SQUAD_ADMIN_EMAILS.includes(userEmail);
   const effectiveIsSuperAdmin = isSuperAdmin || isEmailSuperAdmin;
-  const isAdmin = isAdminForSquad(roles, squadConfig) || effectiveIsSuperAdmin;
-  const availableAdminKeys = effectiveIsSuperAdmin
+  const availableAdminKeys = effectiveIsSuperAdmin || isTestSquadAdmin
     ? ["2014-boys", "2015-girls", "2017-boys", "2017-girls"]
     : adminKeys;
+  const isAdmin = isAdminForSquad(roles, squadConfig) || effectiveIsSuperAdmin || isTestSquadAdmin;
 
-  const canUseAdminSelector = effectiveIsSuperAdmin && availableAdminKeys.length > 1;
+  const canUseAdminSelector = (effectiveIsSuperAdmin || isTestSquadAdmin) && availableAdminKeys.length > 1;
 
   async function signOut() {
     const ok = window.confirm("Are you sure you want to sign out?");
@@ -220,7 +221,7 @@ export default function App() {
             }}
           />
         ) : isAdmin ? (
-          <AdminHome squadConfig={squadConfig} isSuperAdmin={effectiveIsSuperAdmin} onSignOut={signOut} />
+          <AdminHome squadConfig={squadConfig} isSuperAdmin={effectiveIsSuperAdmin} adminSquadKeys={availableAdminKeys} onSignOut={signOut} />
         ) : !termsAccepted ? null : (
           <ParentHome
             supabase={supabase}
