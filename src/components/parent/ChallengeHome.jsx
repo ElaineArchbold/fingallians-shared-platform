@@ -568,9 +568,8 @@ export default function ChallengeHome({
                 <p className="drill-note">{drillIntro(item, camogieLabel)}</p>
 
                 <button
-                  className={`button secondary drill-complete-button ${
-                    done ? "is-complete" : ""
-                  }`}
+                  className={`button secondary drill-complete-button ${done ? "is-complete" : ""
+                    }`}
                   onClick={() => toggleActivity(item)}
                 >
                   {done ? "Completed ✓" : "Mark Complete"}

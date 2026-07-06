@@ -8368,11 +8368,13 @@ button[aria-label="Settings"] {
 }
 
 .recovery-session-toggle h2 {
-  margin: 4px 0;
+  margin: 0 0 6px;
   color: white;
   font-family: var(--font-heading);
-  font-size: clamp(28px, 6vw, 38px);
-  line-height: .95;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  font-weight: 800;
 }
 
 .recovery-session-toggle p {
@@ -9726,5 +9728,24 @@ button[aria-label="Settings"] {
   .recovery-video-frame,
   .recovery-video-frame iframe {
     min-height: 220px;
+  }
+}
+
+/* Final Recovery heading match */
+.recovery-session-toggle h2 {
+  margin: 0 0 6px !important;
+  color: white !important;
+  font-family: var(--font-heading) !important;
+  font-size: 26px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  font-variant: small-caps !important;
+  letter-spacing: 0.02em !important;
+}
+
+@media (max-width: 520px) {
+  .recovery-session-toggle h2 {
+    font-size: 26px !important;
   }
 }
