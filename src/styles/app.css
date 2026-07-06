@@ -9873,3 +9873,23 @@ button[aria-label="Settings"] {
   }
 }
 
+
+
+/* Recovery completion gate */
+.recovery-video-required-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #e0f2fe;
+  color: #075985;
+  font-weight: 900;
+  line-height: 1.35;
+  text-align: center;
+  border: 1px solid rgba(7, 89, 133, .16);
+}
+
+.recovery-complete-button:disabled {
+  opacity: .58;
+  cursor: not-allowed;
+  box-shadow: none !important;
+}
