@@ -4,6 +4,49 @@ import * as htmlToImage from "html-to-image";
 
 const DEFAULT_CENTER = [53.389, -6.246];
 
+const COACH_TIPS = [
+  {
+    icon: "🧡",
+    title: "Listen to your body",
+    text: "Some days you feel full of energy and some days you don't. That's okay — just do your best today.",
+    water: "Have you had enough water today? Drink some before your run and again afterwards.",
+  },
+  {
+    icon: "🌟",
+    title: "Every step counts",
+    text: "You don't have to do it all at once. Split the run into two shorter runs if you need to.",
+    water: "A little drink before you start can help your body feel ready.",
+  },
+  {
+    icon: "🏃",
+    title: "Pace yourself",
+    text: "A steady run is better than a fast start. Save some energy for the finish!",
+    water: "Remember to drink water when you get home too.",
+  },
+  {
+    icon: "👟",
+    title: "Warm up first",
+    text: "Walk for a minute or two before you start running to wake up your muscles.",
+    water: "Water helps your muscles work well. Have a few sips before you go.",
+  },
+  {
+    icon: "💪",
+    title: "Champions recover too",
+    text: "Do your best, take breaks when you need them, and be proud of every kilometre you complete!",
+    water: "Have you had enough water today? Your body will thank you.",
+  },
+  {
+    icon: "😊",
+    title: "Enjoy it",
+    text: "Running outside is a chance to enjoy the fresh air. Look around, breathe calmly, and have fun.",
+    water: "Take a drink before your run and another one afterwards.",
+  },
+];
+
+function pickCoachTip() {
+  return COACH_TIPS[Math.floor(Math.random() * COACH_TIPS.length)];
+}
+
 function toRad(value) {
   return (value * Math.PI) / 180;
 }
@@ -85,6 +128,8 @@ export default function RunLoggerModal({
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [holdPercent, setHoldPercent] = useState(0);
   const [showRunConfetti, setShowRunConfetti] = useState(false);
+  const [showCoachTip, setShowCoachTip] = useState(true);
+  const [coachTip] = useState(() => pickCoachTip());
 
   const [manualDistance, setManualDistance] = useState(
     activity?.target_unit === "km" ? String(activity.target_value || "") : ""
@@ -99,6 +144,7 @@ export default function RunLoggerModal({
   const holdStartRef = useRef(null);
   const holdFrameRef = useRef(null);
   const cardRef = useRef(null);
+  const lastTickRef = useRef(Date.now());
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
@@ -121,10 +167,21 @@ export default function RunLoggerModal({
       event.returnValue = "";
     }
 
+    function handleVisibilityChange() {
+      if (!trackingRef.current || pausedRef.current) return;
+
+      const now = Date.now();
+      if (!document.hidden) {
+        lastTickRef.current = now;
+      }
+    }
+
     window.addEventListener("beforeunload", blockRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("beforeunload", blockRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -180,21 +237,26 @@ export default function RunLoggerModal({
       return;
     }
 
+    setShowCoachTip(false);
     setPoints([]);
     pointsRef.current = [];
     setElapsed(0);
     setPaused(false);
     pausedRef.current = false;
     trackingRef.current = true;
+    lastTickRef.current = Date.now();
     setTracking(true);
     setShowFinishChoice(false);
     setShowDiscardConfirm(false);
     setGpsStatus("Requesting location permission…");
 
     timerRef.current = setInterval(() => {
-      if (!pausedRef.current) {
-        setElapsed(value => value + 1);
-      }
+      if (pausedRef.current) return;
+
+      const now = Date.now();
+      const delta = Math.max(1, Math.round((now - lastTickRef.current) / 1000));
+      lastTickRef.current = now;
+      setElapsed(value => value + delta);
     }, 1000);
 
     function addPoint(position) {
@@ -214,7 +276,7 @@ export default function RunLoggerModal({
         return;
       }
 
-      if (accuracy > 100) {
+      if (accuracy > 120) {
         setGpsStatus(`Weak GPS signal (${Math.round(accuracy)}m). Keep moving in open sky.`);
         return;
       }
@@ -229,7 +291,7 @@ export default function RunLoggerModal({
 
           if (segmentKm < 0.003) return previous;
 
-          if (segmentKm > 0.35 && speedKmh > 28) {
+          if (segmentKm > 0.75 && speedKmh > 35) {
             setGpsStatus("Ignored one jumpy GPS point. Still tracking.");
             return previous;
           }
@@ -253,12 +315,12 @@ export default function RunLoggerModal({
       }
 
       if (error.code === 2) {
-        setGpsStatus("Location is unavailable. Try stepping outside or use manual entry.");
+        setGpsStatus("Location is unavailable. The tracker will reconnect when GPS returns.");
         return;
       }
 
       if (error.code === 3) {
-        setGpsStatus("Still finding GPS. Step outside and wait a few seconds.");
+        setGpsStatus("Still finding GPS. Keep going — it will connect your last and next good point.");
         return;
       }
 
@@ -287,6 +349,7 @@ export default function RunLoggerModal({
 
     pausedRef.current = !pausedRef.current;
     setPaused(pausedRef.current);
+    lastTickRef.current = Date.now();
     setGpsStatus(pausedRef.current ? "Paused." : "GPS active again.");
   }
 
@@ -328,6 +391,50 @@ export default function RunLoggerModal({
     if (reset) setHoldPercent(0);
   }
 
+  function playRunDing() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      const audio = new AudioContext();
+      const now = audio.currentTime;
+
+      const notes = [
+        { frequency: 523.25, start: 0, duration: 0.08 },
+        { frequency: 659.25, start: 0.08, duration: 0.08 },
+        { frequency: 783.99, start: 0.16, duration: 0.12 },
+      ];
+
+      notes.forEach(note => {
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
+
+        gain.gain.setValueAtTime(0.0001, now + note.start);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + note.start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
+
+        oscillator.connect(gain);
+        gain.connect(audio.destination);
+
+        oscillator.start(now + note.start);
+        oscillator.stop(now + note.start + note.duration + 0.03);
+      });
+
+      setTimeout(() => audio.close?.(), 700);
+    } catch {
+      // Audio is optional.
+    }
+  }
+
+  function celebrateRunSaved() {
+    playRunDing();
+    setShowRunConfetti(true);
+    setTimeout(() => setShowRunConfetti(false), 1400);
+  }
+
   async function finishGps() {
     if (!selectedPlayer?.id) {
       alert("Select a player first.");
@@ -337,18 +444,6 @@ export default function RunLoggerModal({
     if (!pointsRef.current.length) {
       alert("No GPS points were recorded yet. Keep moving for a few seconds or discard this run.");
       return;
-    }
-
-    if (targetKm && distanceKm < targetKm) {
-      const ok = window.confirm(
-        `This is ${distanceKm.toFixed(2)} km. The target is ${targetKm.toFixed(2)} km. Save it anyway?`
-      );
-
-      if (!ok) {
-        setShowFinishChoice(false);
-        setHoldPercent(0);
-        return;
-      }
     }
 
     stopTracking();
@@ -403,6 +498,7 @@ export default function RunLoggerModal({
       return;
     }
 
+    setShowCoachTip(false);
     setSaving(true);
 
     const saved = {
@@ -415,6 +511,7 @@ export default function RunLoggerModal({
       durationMin: minutes || null,
       pace: distance > 0 && minutes ? paceFromSeconds(minutes * 60, distance) : null,
       pointCount: 0,
+      routePoints: null,
       savedAt: new Date().toISOString(),
       locked: false,
     };
@@ -428,51 +525,6 @@ export default function RunLoggerModal({
     } finally {
       setSaving(false);
     }
-  }
-
-
-  function playRunDing() {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-
-      const audio = new AudioContext();
-      const now = audio.currentTime;
-
-      const notes = [
-        { frequency: 523.25, start: 0, duration: 0.08 },
-        { frequency: 659.25, start: 0.08, duration: 0.08 },
-        { frequency: 783.99, start: 0.16, duration: 0.12 },
-      ];
-
-      notes.forEach(note => {
-        const oscillator = audio.createOscillator();
-        const gain = audio.createGain();
-
-        oscillator.type = "triangle";
-        oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
-
-        gain.gain.setValueAtTime(0.0001, now + note.start);
-        gain.gain.exponentialRampToValueAtTime(0.18, now + note.start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
-
-        oscillator.connect(gain);
-        gain.connect(audio.destination);
-
-        oscillator.start(now + note.start);
-        oscillator.stop(now + note.start + note.duration + 0.03);
-      });
-
-      setTimeout(() => audio.close?.(), 700);
-    } catch {
-      // Audio is a nice extra only.
-    }
-  }
-
-  function celebrateRunSaved() {
-    playRunDing();
-    setShowRunConfetti(true);
-    setTimeout(() => setShowRunConfetti(false), 1400);
   }
 
   async function shareOrSaveScreenshot() {
@@ -507,10 +559,36 @@ export default function RunLoggerModal({
     URL.revokeObjectURL(url);
   }
 
+  function renderCoachTip() {
+    if (!showCoachTip) return null;
+
+    return (
+      <div className="coach-tip-backdrop" onClick={() => setShowCoachTip(false)}>
+        <div className="coach-tip-card" onClick={event => event.stopPropagation()}>
+          <button
+            type="button"
+            className="coach-tip-close"
+            onClick={() => setShowCoachTip(false)}
+            aria-label="Close coach tip"
+          >
+            ×
+          </button>
+
+          <span className="coach-tip-icon">{coachTip.icon}</span>
+          <small>Coach Tip</small>
+          <h2>{coachTip.title}</h2>
+          <p>{coachTip.text}</p>
+          <p className="coach-tip-water">💧 {coachTip.water}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (finishedRun) {
     return (
       <div className="run-modal-backdrop" onClick={onClose}>
         {showRunConfetti ? <div className="confetti-pop">🎉</div> : null}
+
         <div className="run-modal saved-run-modal" onClick={event => event.stopPropagation()}>
           <button className="modal-close-button" onClick={onClose}>×</button>
 
@@ -601,6 +679,7 @@ export default function RunLoggerModal({
   return (
     <div className="run-modal-backdrop" onClick={requestClose}>
       {showRunConfetti ? <div className="confetti-pop">🎉</div> : null}
+
       <div className="run-modal run-logger-modal" onClick={event => event.stopPropagation()}>
         <button className="modal-close-button" onClick={requestClose}>×</button>
 
@@ -679,28 +758,26 @@ export default function RunLoggerModal({
                 ▶ START GPS RUN
               </button>
             ) : (
-              <>
-                <div className="run-action-grid">
-                  <button className="button secondary" onClick={togglePause} disabled={saving}>
-                    {paused ? "Resume" : "Pause"}
-                  </button>
+              <div className="run-action-grid">
+                <button className="button secondary" onClick={togglePause} disabled={saving}>
+                  {paused ? "Resume" : "Pause"}
+                </button>
 
-                  <button
-                    className="button primary hold-finish-button"
-                    disabled={saving}
-                    onPointerDown={startHoldFinish}
-                    onPointerUp={() => cancelHoldFinish(true)}
-                    onPointerLeave={() => cancelHoldFinish(true)}
-                    onPointerCancel={() => cancelHoldFinish(true)}
-                    style={{
-                      background: `linear-gradient(90deg, #7f1d1d ${holdPercent}%, #b91c1c ${holdPercent}%)`,
-                      touchAction: "none",
-                    }}
-                  >
-                    {saving ? "Saving…" : holdPercent > 0 ? `Hold… ${holdPercent}%` : "Hold to Finish"}
-                  </button>
-                </div>
-              </>
+                <button
+                  className="button primary hold-finish-button"
+                  disabled={saving}
+                  onPointerDown={startHoldFinish}
+                  onPointerUp={() => cancelHoldFinish(true)}
+                  onPointerLeave={() => cancelHoldFinish(true)}
+                  onPointerCancel={() => cancelHoldFinish(true)}
+                  style={{
+                    background: `linear-gradient(90deg, #7f1d1d ${holdPercent}%, #b91c1c ${holdPercent}%)`,
+                    touchAction: "none",
+                  }}
+                >
+                  {saving ? "Saving…" : holdPercent > 0 ? `Hold… ${holdPercent}%` : "Hold to Finish"}
+                </button>
+              </div>
             )}
           </>
         ) : (
@@ -725,7 +802,7 @@ export default function RunLoggerModal({
             />
 
             <button className="button primary" disabled={saving} onClick={saveManual}>
-              {saving ? "Saving…" : "Save Manual Run"}
+              {saving ? "Saving…" : "Save Run"}
             </button>
           </div>
         )}
@@ -747,14 +824,8 @@ export default function RunLoggerModal({
                   Keep Going
                 </button>
 
-                <button
-                  className="button primary"
-                  onClick={() => {
-                    setShowFinishChoice(false);
-                    setShowDiscardConfirm(true);
-                  }}
-                >
-                  Discard
+                <button className="button primary" onClick={finishGps} disabled={saving}>
+                  {saving ? "Saving…" : "Save Run"}
                 </button>
               </div>
             </div>
@@ -772,7 +843,7 @@ export default function RunLoggerModal({
                   className="button secondary"
                   onClick={() => setShowDiscardConfirm(false)}
                 >
-                  Keep Going
+                  Keep Running
                 </button>
 
                 <button
@@ -788,6 +859,8 @@ export default function RunLoggerModal({
             </div>
           </div>
         ) : null}
+
+        {renderCoachTip()}
       </div>
     </div>
   );
