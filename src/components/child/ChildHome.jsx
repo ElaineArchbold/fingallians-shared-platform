@@ -419,6 +419,7 @@ export default function ChildHome({ supabase, squadConfig, childToken }) {
         activeWeek={activeWeek}
         currentWeek={currentWeek}
         lockFutureWeeks={true}
+        showLockedWeekToast={true}
         onChangeWeek={setActiveWeek}
         savedRuns={savedRuns}
         completions={completions}

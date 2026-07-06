@@ -286,8 +286,20 @@ export default function ParentHome({
   async function maybeAwardBadges(playerId) {
     const { data: completionRows } = await supabase
       .from("activity_completions")
-      .select("id,status")
+      .select("id,status,activity_id")
       .eq("player_id", playerId);
+
+    const { data: weeklyRecoveryRows } = await supabase
+      .from("weekly_activities")
+      .select("id,week_number")
+      .eq("activity_key", "recovery")
+      .eq("squad_key", squadConfig.key);
+
+    const recoveryActivityIds = new Set((weeklyRecoveryRows || []).map(row => row.id));
+
+    const recoveryCompletedCount = (completionRows || []).filter(
+      row => row.status === "completed" && recoveryActivityIds.has(row.activity_id)
+    ).length;
 
     const { data: runRows } = await supabase
       .from("run_proofs")
@@ -326,6 +338,18 @@ export default function ParentHome({
 
     if (totalRuns >= 3) {
       badgeInserts.push({ player_id: playerId, badge_key: "three_runs", badge_label: "Three Runs" });
+    }
+
+    if (recoveryCompletedCount >= 1) {
+      badgeInserts.push({ player_id: playerId, badge_key: "first_recovery", badge_label: "First Recovery" });
+    }
+
+    if (recoveryCompletedCount >= 4) {
+      badgeInserts.push({ player_id: playerId, badge_key: "recovery_streak", badge_label: "Recovery Streak" });
+    }
+
+    if (recoveryCompletedCount >= 8) {
+      badgeInserts.push({ player_id: playerId, badge_key: "recovery_hero", badge_label: "Recovery Hero" });
     }
 
     if (totalXp >= 100) {

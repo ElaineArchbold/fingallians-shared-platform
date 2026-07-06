@@ -96,6 +96,7 @@ export default function ChallengeHome({
   activeWeek = getCurrentChallengeWeek(),
   currentWeek = getCurrentChallengeWeek(),
   lockFutureWeeks = false,
+  showLockedWeekToast = false,
   onChangeWeek,
   savedRuns = [],
   completions = [],
@@ -310,10 +311,14 @@ export default function ChallengeHome({
         </div>
 
         <button
-          disabled={nextWeekLocked}
+          disabled={nextWeekLocked && !showLockedWeekToast}
           className={nextWeekLocked ? "week-nav-disabled" : ""}
           onClick={() => {
-            if (nextWeekLocked) return;
+            if (nextWeekLocked) {
+              showToast("🔒 Week not available yet. Check back next week!");
+              return;
+            }
+
             onChangeWeek?.(safeWeek + 1);
           }}
         >
@@ -795,7 +800,15 @@ export default function ChallengeHome({
             const videoId = item.youtube_id;
             const safetyTip =
               item.description ||
-              "Only do what your body can do today. Stretch gently and stop if anything hurts.";
+              "Only do what your body can do. Never push too far. If something hurts, stop and tell an adult.";
+
+            const stretchTitle = item.skill_card_title || "Gentle Stretch";
+            const stretchSteps = [
+              "Move slowly into the stretch.",
+              "Hold gently for 15–20 seconds.",
+              "Breathe slowly while you hold it.",
+              "Stop if it feels sore or sharp.",
+            ];
 
             return (
               <div key={item.id}>
@@ -814,10 +827,76 @@ export default function ChallengeHome({
                     </p>
                   </div>
 
-                  <strong>{recoveryOpen ? "⌃" : "⌄"}</strong>
+                  <strong className="recovery-chevron">{recoveryOpen ? "⌃" : "⌄"}</strong>
                 </button>
 
-                <div className="recovery-session-actions">
+                {recoveryOpen ? (
+                  <div className="recovery-session-body">
+                    <div className="recovery-media-grid">
+                      <div className="recovery-video-column">
+                        <div className="recovery-subheading">
+                          <span>🎥</span>
+                          <strong>Stretches</strong>
+                          <small>{item.target_value ? `${item.target_value} ${item.target_unit || "mins"}` : "Follow the video"}</small>
+                        </div>
+
+                        {videoId ? (
+                          <div className="recovery-video-card">
+                            {!recoveryVideoOpen ? (
+                              <button
+                                className="recovery-video-cover"
+                                type="button"
+                                onClick={() => setRecoveryVideoOpen(true)}
+                              >
+                                <img
+                                  src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+                                  alt={`${item.title} video thumbnail`}
+                                />
+
+                                <span className="recovery-play-button">▶</span>
+                              </button>
+                            ) : (
+                              <div className="video-frame recovery-video-frame">
+                                <iframe
+                                  src={youtubeEmbedUrl(videoId)}
+                                  title={item.title}
+                                  allowFullScreen
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="recovery-stretches-panel">
+                        <div className="recovery-subheading">
+                          <span>🧘</span>
+                          <strong>Weekly Stretch</strong>
+                        </div>
+
+                        <div className="recovery-stretch-box">
+                          <h3>{stretchTitle}</h3>
+                          <p>
+                            You can do this any day, especially after running,
+                            training or matches.
+                          </p>
+
+                          <ol>
+                            {stretchSteps.map(step => (
+                              <li key={step}>{step}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="recovery-safety-line">
+                      <strong>Champion Safety Tip:</strong> {safetyTip}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="recovery-session-footer">
                   <button
                     className={`button recovery-complete-button ${done ? "is-complete" : ""}`}
                     disabled={isFutureWeek}
@@ -825,76 +904,9 @@ export default function ChallengeHome({
                     type="button"
                   >
                     {done ? "Recovered ✓" : "Complete Recovery"}
+                    <span>+{item.points || 1} XP</span>
                   </button>
                 </div>
-
-                {recoveryOpen ? (
-                  <div className="recovery-session-body">
-                    <div className="recovery-xp-strip">
-                      <span>⭐ {item.points || 1} XP</span>
-                      <span>Required task</span>
-                      <span>2–5 mins</span>
-                    </div>
-
-                    <div className="recovery-media-grid">
-                      {videoId ? (
-                        <div className="recovery-video-card">
-                          {!recoveryVideoOpen ? (
-                            <button
-                              className="recovery-video-cover"
-                              type="button"
-                              onClick={() => setRecoveryVideoOpen(true)}
-                            >
-                              <img
-                                src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
-                                alt={`${item.title} video thumbnail`}
-                              />
-
-                              <span className="recovery-play-button">▶</span>
-
-                              <div>
-                                <strong>Play Recovery Video</strong>
-                                <small>Follow gently. No forcing, no bouncing.</small>
-                              </div>
-                            </button>
-                          ) : (
-                            <div className="video-frame recovery-video-frame">
-                              <iframe
-                                src={youtubeEmbedUrl(videoId)}
-                                title={item.title}
-                                allowFullScreen
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-
-                      <button
-                        className="recovery-mind-card"
-                        type="button"
-                        onClick={() => item.skill_card_path
-                          ? setOpenSkillCard({
-                              title: item.skill_card_title || item.title,
-                              pdf: item.skill_card_path,
-                            })
-                          : null
-                        }
-                      >
-                        <span>💙</span>
-                        <strong>{item.skill_card_title || "Mindful Recovery Card"}</strong>
-                        <small>
-                          Breathe slowly, stretch gently, and only do what your body can do today.
-                        </small>
-                        <em>{item.skill_card_path ? "Open Card" : "Read Tip"}</em>
-                      </button>
-                    </div>
-
-                    <div className="recovery-safety-tip">
-                      <strong>💙 Champion Safety Tip</strong>
-                      <p>{safetyTip}</p>
-                    </div>
-                  </div>
-                ) : null}
               </div>
             );
           })}
