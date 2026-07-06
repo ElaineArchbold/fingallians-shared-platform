@@ -87,6 +87,54 @@ function levelFromXp(xp) {
   return Math.max(1, Math.floor(Number(xp || 0) / 100) + 1);
 }
 
+
+const RECOVERY_STRETCHES = {
+  1: {
+    title: "Standing Quad Stretch",
+    how: "Stand on one leg, hold your ankle behind you and gently pull your heel towards your bottom. Keep your knees together.",
+    stretches: "Front of thighs (quadriceps)",
+  },
+  2: {
+    title: "Hamstring Stretch",
+    how: "Sit with one leg straight and the other foot tucked in. Reach towards your toes while keeping your back straight.",
+    stretches: "Back of thighs (hamstrings)",
+  },
+  3: {
+    title: "Calf Stretch",
+    how: "Place your hands against a wall, step one foot back and press the heel into the ground while bending the front knee.",
+    stretches: "Calves",
+  },
+  4: {
+    title: "Butterfly Stretch",
+    how: "Sit with the soles of your feet together and gently let your knees fall towards the floor. Sit up tall.",
+    stretches: "Groin and inner thighs",
+  },
+  5: {
+    title: "Figure 4 Glute Stretch",
+    how: "Lie on your back, cross one ankle over the opposite knee and gently pull the supporting leg towards your chest.",
+    stretches: "Glutes and hips",
+  },
+  6: {
+    title: "Hip Flexor Lunge Stretch",
+    how: "Step into a lunge with one knee on the ground. Keep your chest up and gently push your hips forward.",
+    stretches: "Front of hips",
+  },
+  7: {
+    title: "Child's Pose",
+    how: "Kneel on the floor, sit back on your heels and stretch your arms out in front while lowering your chest.",
+    stretches: "Back, shoulders and hips",
+  },
+  8: {
+    title: "Shoulder & Chest Stretch",
+    how: "Clasp your hands behind your back, straighten your arms and gently lift them while opening your chest.",
+    stretches: "Chest and shoulders",
+  },
+};
+
+function recoveryStretchForWeek(week) {
+  return RECOVERY_STRETCHES[Number(week)] || RECOVERY_STRETCHES[1];
+}
+
 export default function ChallengeHome({
   supabase,
   squadConfig,
@@ -201,7 +249,6 @@ export default function ChallengeHome({
   const squadSession = activities.find(a => a.activity_key === "squad-session");
   const bonus = activities.find(a => a.activity_key === "bonus");
   const recoveryItems = activities.filter(a => a.activity_key === "recovery");
-  const recoveryItem = recoveryItems[0] || null;
 
   const camogieLabel = isGirlsSquad(squadConfig.key) ? "Camogie" : "Hurling";
 
@@ -703,96 +750,6 @@ export default function ChallengeHome({
       )}
 
 
-      {recoveryItem ? (() => {
-        const recoveryDone = completionFor(recoveryItem.id, completions)?.status === "completed";
-        const recoveryParts = String(recoveryItem.description || "")
-          .split("||")
-          .map(part => part.trim())
-          .filter(Boolean);
-        const recoveryText = recoveryParts[0] ||
-          "A short cool-down helps your breathing settle and gives tired muscles a gentle stretch.";
-        const safetyTip = recoveryParts[1] ||
-          "Only do what your body can do. Stretching should feel gentle, never painful.";
-
-        return (
-          <section className={recoveryDone ? "recovery-card is-complete" : "recovery-card"}>
-            <div className="recovery-card-header">
-              <div className="challenge-icon recovery-icon">🩵</div>
-
-              <div>
-                <span className="recovery-label">Rest & Recovery</span>
-                <h2>Recover Like a Champion</h2>
-                <p>{recoveryText}</p>
-              </div>
-            </div>
-
-            <div className="recovery-info-grid">
-              <div>
-                <strong>3 min</strong>
-                <span>Easy video</span>
-              </div>
-
-              <div>
-                <strong>1</strong>
-                <span>Recovery card</span>
-              </div>
-
-              <div>
-                <strong>+1 XP</strong>
-                <span>Optional</span>
-              </div>
-            </div>
-
-            {recoveryItem.youtube_id ? (
-              <div className="recovery-video-cover">
-                <div>
-                  <span>▶</span>
-                  <strong>Recovery Video</strong>
-                  <small>Follow gently. Stop if it does not feel right.</small>
-                </div>
-
-                <div className="video-frame">
-                  <iframe
-                    src={youtubeEmbedUrl(recoveryItem.youtube_id)}
-                    title={recoveryItem.title}
-                    allowFullScreen
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            <div className="recovery-actions-row">
-              {recoveryItem.skill_card_path ? (
-                <button
-                  className="button secondary recovery-card-button"
-                  onClick={() =>
-                    setOpenSkillCard({
-                      title: recoveryItem.skill_card_title || recoveryItem.title,
-                      pdf: recoveryItem.skill_card_path,
-                    })
-                  }
-                >
-                  📖 View Recovery Card
-                </button>
-              ) : null}
-
-              <button
-                className={`button secondary recovery-complete-button ${recoveryDone ? "is-complete" : ""}`}
-                disabled={isFutureWeek}
-                onClick={() => toggleActivity(recoveryItem)}
-              >
-                {recoveryDone ? "Recovery Complete ✓" : "Mark Recovery Complete"}
-              </button>
-            </div>
-
-            <div className="recovery-safety-tip">
-              <strong>Champion Safety Tip</strong>
-              <span>{safetyTip}</span>
-            </div>
-          </section>
-        );
-      })() : null}
-
       {recoveryItems.length ? (
         <section className="recovery-session-card">
           {recoveryItems.slice(0, 1).map(item => {
@@ -802,13 +759,7 @@ export default function ChallengeHome({
               item.description ||
               "Only do what your body can do. Never push too far. If something hurts, stop and tell an adult.";
 
-            const stretchTitle = item.skill_card_title || "Gentle Stretch";
-            const stretchSteps = [
-              "Move slowly into the stretch.",
-              "Hold gently for 15–20 seconds.",
-              "Breathe slowly while you hold it.",
-              "Stop if it feels sore or sharp.",
-            ];
+            const stretch = recoveryStretchForWeek(safeWeek);
 
             return (
               <div key={item.id}>
@@ -836,7 +787,7 @@ export default function ChallengeHome({
                       <div className="recovery-video-column">
                         <div className="recovery-subheading">
                           <span>🎥</span>
-                          <strong>Stretches</strong>
+                          <strong>Stretch Video</strong>
                           <small>{item.target_value ? `${item.target_value} ${item.target_unit || "mins"}` : "Follow the video"}</small>
                         </div>
 
@@ -875,17 +826,28 @@ export default function ChallengeHome({
                         </div>
 
                         <div className="recovery-stretch-box">
-                          <h3>{stretchTitle}</h3>
-                          <p>
-                            You can do this any day, especially after running,
-                            training or matches.
+                          <h3>{stretch.title}</h3>
+
+                          <p className="stretch-intro">
+                            You can do this every day, especially after training,
+                            matches or running.
                           </p>
 
-                          <ol>
-                            {stretchSteps.map(step => (
-                              <li key={step}>{step}</li>
-                            ))}
-                          </ol>
+                          <div className="stretch-instruction-group">
+                            <strong>🧘 HOW TO DO IT</strong>
+
+                            <span>
+                              {stretch.how}
+                            </span>
+                          </div>
+
+                          <div className="stretch-instruction-group">
+                            <strong>💪 WHAT IT STRETCHES</strong>
+
+                            <span>
+                              {stretch.stretches}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -9615,30 +9615,48 @@ button[aria-label="Settings"] {
 }
 
 .recovery-stretch-box {
-  border: 1px solid rgba(7, 89, 133, .18);
-  background: linear-gradient(180deg, #ffffff, #eff6ff);
-  color: #082f49;
-  border-radius: 16px;
-  padding: 18px;
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  box-shadow: 0 8px 18px rgba(12, 74, 110, .1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .recovery-stretch-box h3 {
   margin: 0;
-  color: #0b5fa5;
-  font-family: var(--font-heading);
-  font-size: 28px;
-  line-height: .95;
+  color: #0B5FA5;
+  font-size: 30px;
+  font-weight: 800;
 }
 
-.recovery-stretch-box p {
+.recovery-stretch-box > p {
+  margin: 0;
+  color: #475569;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.stretch-instruction-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stretch-instruction-group strong {
+  display: block;
+  margin: 0;
+  color: #0B5FA5;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.stretch-instruction-group span {
+  display: block;
   margin: 0;
   color: #334155;
-  font-weight: 850;
-  line-height: 1.35;
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 600;
 }
 
 .recovery-stretch-box ol {
