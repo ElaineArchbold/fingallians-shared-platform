@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useWeeklyActivities } from "../../hooks/useWeeklyActivities";
+import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
 import SkillCardModal from "./SkillCardModal";
 import RunProofModal from "./RunProofModal";
 import MyBadgesModal from "./MyBadgesModal";
-import { getCurrentChallengeWeek, clampChallengeWeek } from "../../lib/challengeWeeks";
 
-const CURRENT_WEEK = getCurrentChallengeWeek();
 
 function isGirlsSquad(squadKey = "") {
   return squadKey.includes("girls");
@@ -94,7 +93,8 @@ export default function ChallengeHome({
   selectedPlayer,
   hasMultipleChildren = false,
   onSwitchChild,
-  activeWeek = CURRENT_WEEK,
+  activeWeek = getCurrentChallengeWeek(),
+  currentWeek = getCurrentChallengeWeek(),
   onChangeWeek,
   savedRuns = [],
   completions = [],
@@ -112,7 +112,7 @@ export default function ChallengeHome({
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
 
-  const safeWeek = clampChallengeWeek(activeWeek, CURRENT_WEEK);
+  const safeWeek = Math.min(Number(activeWeek || currentWeek), currentWeek);
 
   const { activities, activitiesLoaded } = useWeeklyActivities(
     supabase,
@@ -281,11 +281,11 @@ export default function ChallengeHome({
 
         <div>
           <strong>Week {safeWeek}</strong>
-          <span>{safeWeek === CURRENT_WEEK ? "Current week" : `Week ${safeWeek}`}</span>
+          <span>{safeWeek === currentWeek ? "Current week" : "Previous week"}</span>
         </div>
 
         <button
-          disabled={safeWeek >= CURRENT_WEEK}
+          disabled={safeWeek >= currentWeek}
           onClick={() => onChangeWeek?.(safeWeek + 1)}
         >
           ›

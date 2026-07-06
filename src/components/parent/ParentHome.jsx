@@ -7,7 +7,6 @@ import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
 import { playCompleteDing } from "../../lib/sounds";
 import { getCurrentChallengeWeek, clampChallengeWeek } from "../../lib/challengeWeeks";
 
-const CURRENT_WEEK = getCurrentChallengeWeek();
 
 function getPlayerInitials(name = "") {
   return name
@@ -61,7 +60,8 @@ export default function ParentHome({
   const [linking, setLinking] = useState(false);
   const [localPlayers, setLocalPlayers] = useState(players || []);
   const [allLinkedPlayers, setAllLinkedPlayers] = useState(players || []);
-  const [challengeWeek, setChallengeWeek] = useState(() => getCurrentChallengeWeek());
+  const currentWeek = getCurrentChallengeWeek();
+  const [challengeWeek, setChallengeWeek] = useState(currentWeek);
   const [runActivity, setRunActivity] = useState(null);
   const [savedRuns, setSavedRuns] = useState([]);
   const [completions, setCompletions] = useState([]);
@@ -652,7 +652,7 @@ export default function ParentHome({
   }
 
   function openWeekFromProgress(week) {
-    setChallengeWeek(clampChallengeWeek(week));
+    setChallengeWeek(clampChallengeWeek(week, currentWeek));
     onChangeParentView("challenge");
   }
 
@@ -818,6 +818,7 @@ export default function ParentHome({
         hasMultipleChildren={(allLinkedPlayers.length || localPlayers.length) > 1}
         onSwitchChild={() => setShowChildSwitcher(true)}
         activeWeek={challengeWeek}
+        currentWeek={currentWeek}
         onChangeWeek={setChallengeWeek}
         savedRuns={savedRuns}
         completions={completions}

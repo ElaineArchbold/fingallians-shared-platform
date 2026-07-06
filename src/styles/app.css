@@ -7454,3 +7454,122 @@ body {
 .mission-snapshot-foot:empty {
   display: none;
 }
+
+
+/* =====================================================
+   PACK 2 Admin Polish
+===================================================== */
+
+.admin-control-actions {
+  grid-template-columns: minmax(170px, 240px) 46px 46px !important;
+}
+
+.admin-icon-button {
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255,255,255,.24) !important;
+  background: rgba(255,255,255,.1) !important;
+  color: white !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+}
+
+.admin-icon-button svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+.admin-signout-link.admin-icon-button {
+  font-size: 0 !important;
+}
+
+.admin-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.admin-section-title-row h2 {
+  margin-bottom: 0 !important;
+}
+
+.admin-info-pill {
+  border: 1px solid rgba(197, 20, 23, .18);
+  background: #fff8f8;
+  color: var(--club-red);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-plan-note {
+  margin-top: 0;
+}
+
+.admin-leaderboard-row {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.admin-leaderboard-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(80, 24, 16, .08);
+}
+
+.admin-player-activity-modal {
+  width: min(720px, 100%) !important;
+}
+
+.admin-player-activity-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 11px;
+  margin: 14px 0;
+}
+
+.admin-player-activity-summary div {
+  border: 1px solid #f0e1df;
+  background: #fff8f8;
+  border-radius: 16px;
+  padding: 12px;
+  text-align: center;
+}
+
+.admin-player-activity-summary strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 23px;
+}
+
+.admin-player-activity-summary span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+@media (max-width: 560px) {
+  .admin-control-actions {
+    grid-template-columns: 1fr 44px 44px !important;
+  }
+
+  .admin-player-activity-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-section-title-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

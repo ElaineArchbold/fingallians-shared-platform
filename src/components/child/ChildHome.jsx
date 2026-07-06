@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
 import { playCompleteDing } from "../../lib/sounds";
+import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
 
-const CURRENT_WEEK = 1;
 
 function xpForActivity(activity, completionType = "activity") {
   const title = String(activity?.title || "").toLowerCase();
@@ -30,6 +30,8 @@ function xpForActivity(activity, completionType = "activity") {
 }
 
 export default function ChildHome({ supabase, squadConfig, childToken }) {
+  const currentWeek = getCurrentChallengeWeek();
+  const [activeWeek, setActiveWeek] = useState(currentWeek);
   const [loading, setLoading] = useState(true);
   const [player, setPlayer] = useState(null);
   const [error, setError] = useState("");
@@ -341,7 +343,7 @@ export default function ChildHome({ supabase, squadConfig, childToken }) {
       player_id: result.playerId,
       player_name: player.name,
       task_key: result.activityId,
-      week: CURRENT_WEEK,
+      week: activeWeek,
       label: result.title,
       target: result.targetKm ? `${result.targetKm} km` : null,
       run_type: result.type,
@@ -414,8 +416,9 @@ export default function ChildHome({ supabase, squadConfig, childToken }) {
         supabase={supabase}
         squadConfig={squadConfig}
         selectedPlayer={player}
-        activeWeek={CURRENT_WEEK}
-        onChangeWeek={() => {}}
+        activeWeek={activeWeek}
+        currentWeek={currentWeek}
+        onChangeWeek={setActiveWeek}
         savedRuns={savedRuns}
         completions={completions}
         xpTotal={xpTotal}

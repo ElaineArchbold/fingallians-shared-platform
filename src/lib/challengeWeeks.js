@@ -1,5 +1,5 @@
 export const CHALLENGE_START_DATE = "2026-06-29";
-export const TOTAL_CHALLENGE_WEEKS = 8;
+export const CHALLENGE_WEEKS = 8;
 
 function startOfLocalDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -8,23 +8,17 @@ function startOfLocalDay(date) {
 export function getCurrentChallengeWeek(today = new Date()) {
   const start = startOfLocalDay(new Date(`${CHALLENGE_START_DATE}T00:00:00`));
   const current = startOfLocalDay(today);
-  const daysSinceStart = Math.floor((current - start) / 86400000);
+  const daysSinceStart = Math.floor((current - start) / (1000 * 60 * 60 * 24));
+  const week = Math.floor(daysSinceStart / 7) + 1;
 
-  if (daysSinceStart < 0) return 1;
-
-  return Math.min(
-    TOTAL_CHALLENGE_WEEKS,
-    Math.max(1, Math.floor(daysSinceStart / 7) + 1)
-  );
+  return Math.min(CHALLENGE_WEEKS, Math.max(1, week));
 }
 
 export function clampChallengeWeek(week, currentWeek = getCurrentChallengeWeek()) {
-  return Math.min(
-    currentWeek,
-    Math.max(1, Number(week || currentWeek || 1))
-  );
+  const numeric = Number(week || currentWeek);
+  return Math.min(currentWeek, Math.max(1, numeric));
 }
 
-export function isFutureChallengeWeek(week, currentWeek = getCurrentChallengeWeek()) {
-  return Number(week || 1) > currentWeek;
+export function isCurrentChallengeWeek(week, currentWeek = getCurrentChallengeWeek()) {
+  return Number(week) === Number(currentWeek);
 }

@@ -100,6 +100,15 @@ function dateTime(value) {
   }
 }
 
+function canShareFiles() {
+  return Boolean(navigator.share);
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
 async function downloadNodeAsImage(node, filename) {
   if (!node) return;
 
@@ -109,12 +118,32 @@ async function downloadNodeAsImage(node, filename) {
     const dataUrl = await htmlToImage.toPng(node, {
       pixelRatio: 2,
       backgroundColor: "#fffaf4",
+      cacheBust: true,
     });
+
+    if (canShareFiles()) {
+      try {
+        const blob = await dataUrlToBlob(dataUrl);
+        const file = new File([blob], filename, { type: "image/png" });
+
+        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: "Fingallians Leaderboard",
+            files: [file],
+          });
+          return;
+        }
+      } catch {
+        // Fall through to download/print.
+      }
+    }
 
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = filename;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     return;
   }
 
@@ -139,6 +168,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
   const [coachPlayer, setCoachPlayer] = useState(null);
   const [runActivity, setRunActivity] = useState(null);
   const [toast, setToast] = useState("");
+  const [coachRefreshKey, setCoachRefreshKey] = useState(0);
 
   const leaderboardRef = useRef(null);
 
@@ -493,7 +523,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
   }
 
   async function adminToggleActivity(activity, existingCompletion, player) {
-    if (!player?.id) return;
+    if (!player?.id) return false;
 
     if (existingCompletion) {
       const { error } = await supabase
@@ -504,17 +534,23 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
       if (error) {
         alert(error.message);
-        return;
+        return false;
       }
 
-      await supabase
+      const { error: xpDeleteError } = await supabase
         .from("xp_transactions")
         .delete()
         .eq("player_id", player.id)
         .eq("activity_id", activity.id);
 
-      loadAdminData();
-      return;
+      if (xpDeleteError) {
+        alert(xpDeleteError.message);
+        return false;
+      }
+
+      await loadAdminData();
+      showToast("Activity removed.");
+      return true;
     }
 
     const { data, error } = await supabase
@@ -532,23 +568,30 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
     if (error) {
       alert(error.message);
-      return;
+      return false;
     }
 
     const xp = xpForActivity(activity, "admin_activity");
 
     if (xp) {
-      await supabase.from("xp_transactions").insert({
+      const { error: xpError } = await supabase.from("xp_transactions").insert({
         player_id: player.id,
         activity_id: activity.id,
-        activity_completion_id: data.id,
+        activity_completion_id: data?.id || null,
         xp,
         reason: activity.title,
         source: "admin_activity",
       });
+
+      if (xpError) {
+        alert(xpError.message);
+        return false;
+      }
     }
 
-    loadAdminData();
+    await loadAdminData();
+    showToast(`Activity saved${xp ? ` (+${xp} XP)` : ""}.`);
+    return true;
   }
 
   async function adminSubmitApproval(activity, type, player) {
@@ -939,7 +982,22 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
     return (
       <div className="admin-panel">
         <section className="admin-card">
-          <h2>Plan Editor</h2>
+          <div className="admin-section-title-row">
+            <h2>Plan Editor</h2>
+            <button
+              type="button"
+              className="admin-info-pill"
+              onClick={() =>
+                alert("Coming soon: full plan editing from the admin dashboard. For now this preview shows the activities loaded from weekly_activities. Use Supabase for launch-critical changes.")
+              }
+            >
+              ⓘ Coming soon
+            </button>
+          </div>
+
+          <p className="muted admin-plan-note">
+            Preview weekly activities here. Full safe editing/versioning will be added before launch.
+          </p>
 
           <div className="admin-plan-toolbar">
             <label>
@@ -975,8 +1033,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                   ) : null}
                 </div>
 
-                <button className="button secondary" onClick={() => setEditingActivity(activity)}>
-                  Edit
+                <button
+                  className="button secondary"
+                  onClick={() =>
+                    alert("Plan editing is coming soon. Use Supabase weekly_activities for now if you need a real change.")
+                  }
+                >
+                  Info
                 </button>
               </div>
             ))}
@@ -1049,7 +1112,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
 
           <div className="admin-leaderboard-list">
             {leaderboard.map((row, index) => (
-              <div className={`admin-leaderboard-row rank-${index + 1}`} key={row.player.id}>
+              <button
+                type="button"
+                className={`admin-leaderboard-row rank-${index + 1}`}
+                key={row.player.id}
+                onClick={() => setDetailModal({ type: "playerActivity", player: row.player })}
+              >
                 <span className="rank-number">{index + 1}</span>
                 <span className="rank-avatar">{initials(row.player.name)}</span>
 
@@ -1059,7 +1127,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                 </div>
 
                 <em>{row.xp} XP</em>
-              </div>
+              </button>
             ))}
           </div>
         </section>
@@ -1111,6 +1179,88 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
                 No stored screenshot image yet. The run record is saved and can still be reviewed here.
               </p>
             )}
+          </div>
+        </div>
+      );
+    }
+
+
+    if (typeof detailModal === "object" && detailModal.type === "playerActivity") {
+      const player = detailModal.player;
+      const playerCompletions = completions
+        .filter(row => row.player_id === player.id)
+        .sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
+
+      const playerRuns = runs
+        .filter(row => row.player_id === player.id)
+        .sort((a, b) => new Date(b.saved_at || 0) - new Date(a.saved_at || 0));
+
+      const playerXp = xpRows
+        .filter(row => row.player_id === player.id)
+        .reduce((sum, row) => sum + num(row.xp), 0);
+
+      return (
+        <div className="admin-modal-backdrop" onClick={() => setDetailModal(null)}>
+          <div className="admin-modal admin-player-activity-modal" onClick={event => event.stopPropagation()}>
+            <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
+
+            <h2>{player.name}</h2>
+            <p className="muted">{displaySquad(player.squad_key)} · {playerXp} XP</p>
+
+            <div className="admin-player-activity-summary">
+              <div>
+                <strong>{playerCompletions.filter(isApproved).length}</strong>
+                <span>Completed</span>
+              </div>
+              <div>
+                <strong>{playerRuns.length}</strong>
+                <span>Runs</span>
+              </div>
+              <div>
+                <strong>{playerRuns.reduce((sum, run) => sum + num(run.distance_km), 0).toFixed(1)} km</strong>
+                <span>Distance</span>
+              </div>
+            </div>
+
+            <div className="admin-drawer-section">
+              <h3>Completed Activities</h3>
+              {playerCompletions.length ? (
+                playerCompletions.map(item => {
+                  const activity = activityById(item.activity_id);
+
+                  return (
+                    <div className="admin-run-row" key={item.id}>
+                      <div>
+                        <strong>{activity.title || item.completion_type}</strong>
+                        <small>{statusLabel(item.status)} · {dateTime(item.completed_at)}</small>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="muted">No completed activities yet.</p>
+              )}
+            </div>
+
+            <div className="admin-drawer-section">
+              <h3>Saved Runs</h3>
+              {playerRuns.length ? (
+                playerRuns.map(run => (
+                  <div className="admin-run-row" key={run.id}>
+                    <div>
+                      <strong>{run.label || "Run"}</strong>
+                      <small>{run.run_type} · {num(run.distance_km).toFixed(2)} km · {dateTime(run.saved_at)}</small>
+                    </div>
+
+                    <button className="button secondary" onClick={() => setDetailModal({ type: "run", run })}>
+                      View
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">No runs saved.</p>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -1196,6 +1346,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
           </div>
 
           <ChallengeHome
+            key={`${coachPlayer.id}-${coachRefreshKey}`}
             supabase={supabase}
             squadConfig={{
               ...squadConfig,
@@ -1211,9 +1362,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
             badges={playerBadges}
             onStartRun={activity => setRunActivity(activity)}
             onDeleteManualRun={() => {}}
-            onToggleActivity={(activity, existingCompletion) =>
-              adminToggleActivity(activity, existingCompletion, coachPlayer)
-            }
+            onToggleActivity={async (activity, existingCompletion) => {
+              const saved = await adminToggleActivity(activity, existingCompletion, coachPlayer);
+              if (saved) setCoachRefreshKey(current => current + 1);
+            }}
             onSubmitApproval={(activity, type) =>
               adminSubmitApproval(activity, type, coachPlayer)
             }
@@ -1273,13 +1425,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin, onSignOut }) {
             ))}
           </select>
 
-          <button className="admin-bell-button" onClick={() => setActiveTab("approvals")}>
-            🔔
+          <button className="admin-bell-button admin-icon-button" onClick={() => setActiveTab("approvals")} aria-label="Approvals">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.7 2.7 0 0 0 2.6-2h-5.2A2.7 2.7 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
             {pendingApprovals.length ? <em>{pendingApprovals.length}</em> : null}
           </button>
 
-          <button className="admin-signout-link" onClick={onSignOut}>
-            Sign out
+          <button className="admin-signout-link admin-icon-button" onClick={onSignOut} aria-label="Sign out">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9a2 2 0 0 1 2 2v3h-2V5H7v14h7v-3h2v3a2 2 0 0 1-2 2H5V3Zm11.6 5.4L20.2 12l-3.6 3.6-1.4-1.4 1.2-1.2H10v-2h6.4l-1.2-1.2 1.4-1.4Z"/></svg>
           </button>
         </div>
       </section>

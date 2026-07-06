@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
+import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
 import SkillCardModal from "./SkillCardModal";
-import { getCurrentChallengeWeek, TOTAL_CHALLENGE_WEEKS } from "../../lib/challengeWeeks";
 
 const CURRENT_WEEK = getCurrentChallengeWeek();
 
@@ -149,7 +149,7 @@ export default function ProgressHome({
   onOpenWeek,
 }) {
   const [activeTab, setActiveTab] = useState("journey");
-  const [selectedWeek, setSelectedWeek] = useState(() => getCurrentChallengeWeek());
+  const [selectedWeek, setSelectedWeek] = useState(CURRENT_WEEK);
   const [previewWeek, setPreviewWeek] = useState(null);
   const [openSkillCard, setOpenSkillCard] = useState(null);
 
