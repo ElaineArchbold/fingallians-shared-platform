@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ChallengeHome from "./ChallengeHome";
 import ProgressHome from "./ProgressHome";
 import SettingsHome from "./SettingsHome";
@@ -15,6 +15,18 @@ function getPlayerInitials(name = "") {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+
+function iconForBadge(key = "") {
+  if (key.includes("gps")) return "📍";
+  if (key.includes("run")) return "🏃";
+  if (key.includes("recovery")) return "🧘";
+  if (key.includes("xp")) return "⭐";
+  if (key.includes("friday")) return "🟢";
+  if (key.includes("squad")) return "🤝";
+  if (key.includes("mission")) return "🔥";
+  return "🏅";
 }
 
 function xpForActivity(activity, completionType = "activity") {
@@ -69,6 +81,8 @@ export default function ParentHome({
   const [xpTotal, setXpTotal] = useState(0);
   const [xpTransactions, setXpTransactions] = useState([]);
   const [badges, setBadges] = useState([]);
+  const [badgeToast, setBadgeToast] = useState(null);
+  const badgeToastTimerRef = useRef(null);
   const [showChildSwitcher, setShowChildSwitcher] = useState(false);
 
   const { weeks } = useAllWeeklyActivities(supabase, squadConfig.key);
@@ -283,6 +297,24 @@ export default function ParentHome({
     setBadges(data || []);
   }
 
+
+  function showNewBadgeToast(badge) {
+    if (!badge?.badge_key) return;
+
+    if (badgeToastTimerRef.current) {
+      clearTimeout(badgeToastTimerRef.current);
+    }
+
+    setBadgeToast({
+      icon: iconForBadge(badge.badge_key),
+      label: badge.badge_label || "New Badge",
+    });
+
+    badgeToastTimerRef.current = setTimeout(() => {
+      setBadgeToast(null);
+    }, 4200);
+  }
+
   async function maybeAwardBadges(playerId) {
     const { data: completionRows } = await supabase
       .from("activity_completions")
@@ -366,9 +398,21 @@ export default function ParentHome({
 
     if (!badgeInserts.length) return;
 
+    const { data: existingBadgeRows } = await supabase
+      .from("player_badges")
+      .select("badge_key")
+      .eq("player_id", playerId);
+
+    const existingBadgeKeys = new Set((existingBadgeRows || []).map(row => row.badge_key));
+    const newBadges = badgeInserts.filter(row => !existingBadgeKeys.has(row.badge_key));
+
     await supabase
       .from("player_badges")
       .upsert(badgeInserts, { onConflict: "player_id,badge_key" });
+
+    if (newBadges.length) {
+      showNewBadgeToast(newBadges[0]);
+    }
   }
 
   async function awardXp({
@@ -604,6 +648,7 @@ export default function ParentHome({
         id: result.activityId,
         title: result.title,
         activity_key: "fitness",
+        target_unit: "km",
       };
 
     const completion = await upsertCompletion({
@@ -837,6 +882,16 @@ export default function ParentHome({
 
   return (
     <div className="page">
+      {badgeToast ? (
+        <div className="new-badge-toast">
+          <span>{badgeToast.icon}</span>
+          <div>
+            <strong>New Badge!</strong>
+            <p>{badgeToast.label}</p>
+          </div>
+        </div>
+      ) : null}
+
 <ChallengeHome
         supabase={supabase}
         squadConfig={squadConfig}

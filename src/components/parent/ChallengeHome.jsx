@@ -165,6 +165,14 @@ export default function ChallengeHome({
   const [squadOpen, setSquadOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryVideoOpen, setRecoveryVideoOpen] = useState(false);
+  const [recoveryVideoStartedById, setRecoveryVideoStartedById] = useState({});
+
+  function markRecoveryVideoStarted(itemId) {
+    setRecoveryVideoStartedById(previous => ({
+      ...previous,
+      [itemId]: true,
+    }));
+  }
   const [openSkillCard, setOpenSkillCard] = useState(null);
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
@@ -568,8 +576,9 @@ export default function ChallengeHome({
                 <p className="drill-note">{drillIntro(item, camogieLabel)}</p>
 
                 <button
-                  className={`button secondary drill-complete-button ${done ? "is-complete" : ""
-                    }`}
+                  className={`button secondary drill-complete-button ${
+                    done ? "is-complete" : ""
+                  }`}
                   onClick={() => toggleActivity(item)}
                 >
                   {done ? "Completed ✓" : "Mark Complete"}
@@ -754,13 +763,31 @@ export default function ChallengeHome({
           {recoveryItems.slice(0, 1).map(item => {
             const done = completionFor(item.id, completions)?.status === "completed";
             const videoId = item.youtube_id;
+            const hasStartedRecoveryVideo = Boolean(recoveryVideoStartedById[item.id]);
+            const canCompleteRecovery = done || (recoveryOpen && (!videoId || hasStartedRecoveryVideo));
             const safetyTip =
               item.description ||
               "Only do what your body can do. Never push too far. If something hurts, stop and tell an adult.";
 
             const stretch = recoveryStretchForWeek(safeWeek);
 
-            return (
+          
+  const visibleWeekActivities = (activities || []).filter(activity => {
+    const section = activity.section || activity.phase || "";
+    return activity.visible_to_parent !== false && Number(activity.week_number || activeWeek) === Number(activeWeek);
+  });
+
+  const completableWeekActivities = visibleWeekActivities.filter(activity => {
+    return activity.activity_key !== "rest-day";
+  });
+
+  const weeklyCompletedCount = completableWeekActivities.filter(activity => {
+    return completionFor(activity.id, completions)?.status === "completed";
+  }).length;
+
+  const weeklyTotalCount = completableWeekActivities.length;
+  const weekIsComplete = weeklyTotalCount > 0 && weeklyCompletedCount >= weeklyTotalCount;
+  return (
               <div key={item.id}>
                 <button
                   className="recovery-session-toggle"
@@ -796,7 +823,10 @@ export default function ChallengeHome({
                               <button
                                 className="recovery-video-cover"
                                 type="button"
-                                onClick={() => setRecoveryVideoOpen(true)}
+                                onClick={() => {
+                                  setRecoveryVideoOpen(true);
+                                  markRecoveryVideoStarted(item.id);
+                                }}
                               >
                                 <img
                                   src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
@@ -850,6 +880,12 @@ export default function ChallengeHome({
                         </div>
                       </div>
                     </div>
+
+                    {!done && videoId && !hasStartedRecoveryVideo ? (
+                      <p className="recovery-video-required-note">
+                        ▶ Start the stretch video first, then you can mark Recovery complete.
+                      </p>
+                    ) : null}
 
                     <p className="recovery-safety-line">
                       <strong>Champion Safety Tip:</strong> {safetyTip}
