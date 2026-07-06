@@ -632,9 +632,10 @@ export default function ParentHome({
           ? Number((result.durationMin / result.distanceKm).toFixed(2))
           : null,
       note: result.type === "gps" ? "Verified GPS run" : "Manual run entry",
+      route_points: result.type === "gps" ? result.routePoints || [] : null,
       saved_at: result.savedAt,
       updated_at: new Date().toISOString(),
-      has_screenshot: false,
+      has_screenshot: result.type === "gps" && Array.isArray(result.routePoints) && result.routePoints.length > 0,
       share_image_url: null,
     });
 
