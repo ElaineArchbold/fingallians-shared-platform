@@ -446,6 +446,13 @@ export default function RunLoggerModal({
       return;
     }
 
+    if (targetKm && distanceKm < targetKm) {
+      alert(`This GPS run is ${distanceKm.toFixed(2)} km. The target is ${targetKm.toFixed(2)} km, so it cannot be saved yet.`);
+      setShowFinishChoice(false);
+      setHoldPercent(0);
+      return;
+    }
+
     stopTracking();
     setTracking(false);
     setShowFinishChoice(false);
@@ -811,7 +818,13 @@ export default function RunLoggerModal({
           <div className="run-confirm-backdrop">
             <div className="run-confirm-modal">
               <h2>Finish this run?</h2>
-              <p>Save {distanceKm.toFixed(2)} km for {selectedPlayer.name}?</p>
+              <p>
+                You have recorded {distanceKm.toFixed(2)} km for {selectedPlayer.name}.
+                {targetKm && distanceKm < targetKm
+                  ? ` The target is ${targetKm.toFixed(2)} km, so this GPS run cannot be saved yet.`
+                  : " Target reached."}
+                Keep going to add more distance, or discard this run if you want to stop without saving.
+              </p>
 
               <div className="run-action-grid">
                 <button
@@ -824,8 +837,14 @@ export default function RunLoggerModal({
                   Keep Going
                 </button>
 
-                <button className="button primary" onClick={finishGps} disabled={saving}>
-                  {saving ? "Saving…" : "Save Run"}
+                <button
+                  className="button primary"
+                  onClick={() => {
+                    setShowFinishChoice(false);
+                    setShowDiscardConfirm(true);
+                  }}
+                >
+                  Discard
                 </button>
               </div>
             </div>
