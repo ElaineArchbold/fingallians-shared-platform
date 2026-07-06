@@ -166,13 +166,6 @@ export default function ChallengeHome({
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryVideoOpen, setRecoveryVideoOpen] = useState(false);
   const [recoveryVideoStartedById, setRecoveryVideoStartedById] = useState({});
-
-  function markRecoveryVideoStarted(itemId) {
-    setRecoveryVideoStartedById(previous => ({
-      ...previous,
-      [itemId]: true,
-    }));
-  }
   const [openSkillCard, setOpenSkillCard] = useState(null);
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
@@ -247,6 +240,27 @@ export default function ChallengeHome({
     }
   }
 
+  function runForActivity(activity) {
+    if (!activity) return null;
+
+    return savedRuns.find(run => {
+      const sameTask = String(run.task_key || "") === String(activity.id || "");
+      const sameWeek = Number(run.week || safeWeek) === Number(safeWeek);
+      const sameTitle =
+        String(run.label || "").toLowerCase().trim() ===
+        String(activity.title || "").toLowerCase().trim();
+
+      return sameTask || (sameWeek && sameTitle);
+    });
+  }
+
+  function markRecoveryVideoStarted(activityId) {
+    setRecoveryVideoStartedById(previous => ({
+      ...previous,
+      [activityId]: true,
+    }));
+  }
+
   const fitnessItems = activities
     .filter(a => a.activity_key === "fitness")
     .slice(0, 3);
@@ -257,6 +271,7 @@ export default function ChallengeHome({
   const squadSession = activities.find(a => a.activity_key === "squad-session");
   const bonus = activities.find(a => a.activity_key === "bonus");
   const recoveryItems = activities.filter(a => a.activity_key === "recovery");
+  const recoveryItem = recoveryItems[0] || null;
 
   const camogieLabel = isGirlsSquad(squadConfig.key) ? "Camogie" : "Hurling";
 
@@ -451,7 +466,7 @@ export default function ChallengeHome({
 
         <div className="fitness-pill-grid">
           {fitnessItems.map(item => {
-            const savedRun = savedRuns.find(run => run.task_key === item.id);
+            const savedRun = runForActivity(item);
             const completion = completionFor(item.id, completions);
             const done = Boolean(completion) || Boolean(savedRun);
             const run = isRunActivity(item);
@@ -771,23 +786,7 @@ export default function ChallengeHome({
 
             const stretch = recoveryStretchForWeek(safeWeek);
 
-          
-  const visibleWeekActivities = (activities || []).filter(activity => {
-    const section = activity.section || activity.phase || "";
-    return activity.visible_to_parent !== false && Number(activity.week_number || activeWeek) === Number(activeWeek);
-  });
-
-  const completableWeekActivities = visibleWeekActivities.filter(activity => {
-    return activity.activity_key !== "rest-day";
-  });
-
-  const weeklyCompletedCount = completableWeekActivities.filter(activity => {
-    return completionFor(activity.id, completions)?.status === "completed";
-  }).length;
-
-  const weeklyTotalCount = completableWeekActivities.length;
-  const weekIsComplete = weeklyTotalCount > 0 && weeklyCompletedCount >= weeklyTotalCount;
-  return (
+            return (
               <div key={item.id}>
                 <button
                   className="recovery-session-toggle"
@@ -813,7 +812,7 @@ export default function ChallengeHome({
                       <div className="recovery-video-column">
                         <div className="recovery-subheading">
                           <span>🎥</span>
-                          <strong>Stretch Video</strong>
+                          <strong>Stretches</strong>
                           <small>{item.target_value ? `${item.target_value} ${item.target_unit || "mins"}` : "Follow the video"}</small>
                         </div>
 
@@ -856,26 +855,19 @@ export default function ChallengeHome({
 
                         <div className="recovery-stretch-box">
                           <h3>{stretch.title}</h3>
-
-                          <p className="stretch-intro">
-                            You can do this every day, especially after training,
-                            matches or running.
+                          <p>
+                            You can do this any day, especially after running,
+                            training or matches.
                           </p>
 
                           <div className="stretch-instruction-group">
-                            <strong>🧘 HOW TO DO IT</strong>
-
-                            <span>
-                              {stretch.how}
-                            </span>
+                            <strong>How to do it</strong>
+                            <span>{stretch.how}</span>
                           </div>
 
                           <div className="stretch-instruction-group">
-                            <strong>💪 WHAT IT STRETCHES</strong>
-
-                            <span>
-                              {stretch.stretches}
-                            </span>
+                            <strong>What it stretches</strong>
+                            <span>{stretch.stretches}</span>
                           </div>
                         </div>
                       </div>
@@ -896,11 +888,18 @@ export default function ChallengeHome({
                 <div className="recovery-session-footer">
                   <button
                     className={`button recovery-complete-button ${done ? "is-complete" : ""}`}
-                    disabled={isFutureWeek}
-                    onClick={() => toggleActivity(item)}
+                    disabled={isFutureWeek || !canCompleteRecovery}
+                    onClick={() => {
+                      if (!canCompleteRecovery) {
+                        showToast("Start the Recovery video first, then you can complete it.");
+                        return;
+                      }
+
+                      toggleActivity(item);
+                    }}
                     type="button"
                   >
-                    {done ? "Recovered ✓" : "Complete Recovery"}
+                    {done ? "Recovered ✓" : canCompleteRecovery ? "Complete Recovery" : "Watch Video First"}
                     <span>+{item.points || 1} XP</span>
                   </button>
                 </div>

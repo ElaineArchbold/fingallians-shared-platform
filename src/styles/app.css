@@ -10015,6 +10015,7 @@ button[aria-label="Settings"] {
   100% { opacity: 0; transform: translateY(-22px) scale(.9); }
 }
 
+
 /* Recovery completion gate */
 .recovery-video-required-note {
   margin: 0;
