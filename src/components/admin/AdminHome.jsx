@@ -3,6 +3,8 @@ import { supabase } from "../../lib/supabaseClient";
 import { playCompleteDing } from "../../lib/sounds";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
+import CoachPlayerView from "./CoachPlayerView";
+import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
 
 const SQUADS = [
   { key: "all", label: "All Squads" },
@@ -18,7 +20,6 @@ const ADMIN_TABS = [
   { key: "players", label: "Players", icon: "👧" },
   { key: "plans", label: "Plans", icon: "🗓️" },
   { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
-  { key: "settings", label: "Settings", icon: "⚙️" },
 ];
 
 function displaySquad(key) {
@@ -91,8 +92,19 @@ function xpForActivity(activity, completionType = "activity") {
 
   if (activity?.activity_key === "squad-session") return 4;
   if (activity?.activity_key === "bonus") return 4;
+  if (activity?.activity_key === "recovery") return 1;
 
   return 1;
+}
+
+function rpcDeleteSummary(data) {
+  if (!data) return "No response returned.";
+  return [
+    `runs: ${data.deleted_runs ?? 0}`,
+    `completions: ${data.deleted_completions ?? 0}`,
+    `xp: ${data.deleted_xp ?? 0}`,
+    data.auth_email ? `auth: ${data.auth_email}` : null,
+  ].filter(Boolean).join(" · ");
 }
 
 function dateTime(value) {
@@ -161,6 +173,7 @@ async function downloadNodeAsImage(node, filename) {
 }
 
 export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = [], onSignOut }) {
+  const currentChallengeWeek = getCurrentChallengeWeek();
   const [activeTab, setActiveTab] = useState("overview");
   const [adminSquad, setAdminSquad] = useState(isSuperAdmin ? "all" : (adminSquadKeys[0] || squadConfig.key));
   const [loading, setLoading] = useState(true);
@@ -176,6 +189,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [planWeek, setPlanWeek] = useState(1);
   const [editingActivity, setEditingActivity] = useState(null);
   const [coachPlayer, setCoachPlayer] = useState(null);
+  const [coachWeek, setCoachWeek] = useState(1);
   const [runActivity, setRunActivity] = useState(null);
   const [toast, setToast] = useState("");
   const [coachRefreshKey, setCoachRefreshKey] = useState(0);
@@ -418,7 +432,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   async function approveCompletion(completion) {
     if (!isApprovalType(completion)) {
       alert("Only Squad Sessions and Friday Night Hurling need admin approval.");
-      return;
+      return false;
     }
 
     const activity = activityById(completion.activity_id);
@@ -437,13 +451,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (updateError) {
       console.error("Approval update failed:", updateError);
       alert(`Could not approve: ${updateError.message}`);
-      return;
+      return false;
     }
 
     if (!updatedRows?.length) {
       alert("Could not approve this item. It may already be approved, or it is not a Squad Session/Friday Night Hurling approval.");
       await loadAdminData();
-      return;
+      return false;
     }
 
     const { error: deleteXpError } = await supabase
@@ -472,12 +486,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         console.error("XP insert failed:", xpError);
         alert(`Approved, but could not award XP: ${xpError.message}`);
         await loadAdminData();
-        return;
+        return false;
       }
     }
 
     showToast(`Approved${xp ? ` and awarded ${xp} XP` : ""}.`);
     await loadAdminData();
+    return true;
   }
 
   async function rejectCompletion(completion) {
@@ -543,14 +558,14 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   }
 
   async function adminToggleActivity(activity, existingCompletion, player) {
-    if (!player?.id) return false;
+    if (!player?.id || !activity?.id) return false;
 
     if (existingCompletion) {
       const { error } = await supabase
         .from("activity_completions")
         .delete()
-        .eq("id", existingCompletion.id)
-        .neq("gps_verified", true);
+        .eq("player_id", player.id)
+        .eq("activity_id", activity.id);
 
       if (error) {
         alert(error.message);
@@ -564,7 +579,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         .eq("activity_id", activity.id);
 
       await loadAdminData();
-      showToast("Activity removed.");
+      showToast("Completion removed.");
       return true;
     }
 
@@ -930,7 +945,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         <div className="admin-adjust-card">
           <h3>Coach Actions</h3>
 
-          <button className="button primary" onClick={() => setCoachPlayer(player)}>
+          <button className="button primary" onClick={() => { setCoachPlayer(player); setCoachWeek(currentChallengeWeek); }}>
             View / Edit as Player
           </button>
 
@@ -959,9 +974,15 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                   <small>{run.run_type} · {num(run.distance_km).toFixed(2)} km · {dateTime(run.saved_at)}</small>
                 </div>
 
-                <button className="button secondary" onClick={() => setDetailModal({ type: "run", run })}>
-                  View
-                </button>
+                <div className="admin-row-actions">
+                  <button className="button secondary" onClick={() => setDetailModal({ type: "run", run })}>
+                    View
+                  </button>
+
+                  <button className="button secondary danger-button" onClick={() => adminDeleteRun(run)}>
+                    Remove
+                  </button>
+                </div>
               </div>
             ))
           ) : (
@@ -1202,6 +1223,16 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                 No stored screenshot image yet. The run record is saved and can still be reviewed here.
               </p>
             )}
+
+            <button
+              className="button secondary danger-button"
+              onClick={async () => {
+                const removed = await adminDeleteRun(run);
+                if (removed) setDetailModal(null);
+              }}
+            >
+              Remove Run
+            </button>
           </div>
         </div>
       );
@@ -1437,6 +1468,146 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     return true;
   }
 
+  async function adminCoachApprove(completion) {
+    if (!completion) return false;
+
+    if (completion.status === "completed") {
+      showToast("Already approved.");
+      return true;
+    }
+
+    const saved = await approveCompletion(completion);
+    setCoachRefreshKey(current => current + 1);
+    return saved;
+  }
+
+  async function adminCoachUnapprove(completion) {
+    if (!completion) return false;
+
+    const saved = await adminUnapproveCompletion(completion);
+
+    if (saved) {
+      setCoachRefreshKey(current => current + 1);
+    }
+
+    return saved;
+  }
+
+  async function adminCoachApproveActivity(activity, completion, player) {
+    if (!player?.id || !activity?.id) return false;
+
+    let approvalCompletion = completion;
+
+    if (!approvalCompletion) {
+      const { data, error } = await supabase
+        .from("activity_completions")
+        .insert({
+          player_id: player.id,
+          activity_id: activity.id,
+          status: "awaiting_approval",
+          completion_type: activity.activity_key === "bonus" ? "bonus_approval" : "squad_approval",
+          gps_verified: false,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        alert(error.message);
+        return false;
+      }
+
+      approvalCompletion = data;
+    }
+
+    const saved = await approveCompletion(approvalCompletion);
+
+    if (saved) {
+      setCoachRefreshKey(current => current + 1);
+    }
+
+    return saved;
+  }
+
+  async function adminCoachUnapproveActivity(activity, completion) {
+    if (!coachPlayer?.id || !activity?.id) return false;
+
+    const saved = await adminMarkActivityIncomplete(activity, completion, coachPlayer);
+
+    if (saved) {
+      setCoachRefreshKey(current => current + 1);
+    }
+
+    return saved;
+  }
+
+  async function adminMarkActivityIncomplete(activity, completion, player) {
+    if (!player?.id || !activity?.id) {
+      alert("Missing player or activity ID.");
+      return false;
+    }
+
+    const ok = window.confirm(`Remove completion for "${activity.title}" from ${player.name}?`);
+    if (!ok) return false;
+
+    const { data, error } = await supabase.rpc("admin_debug_remove_player_activity", {
+      target_player_id: player.id,
+      target_activity_id: activity.id,
+    });
+
+    if (error) {
+      console.error("admin_debug_remove_player_activity failed", error);
+      alert(`Remove failed: ${error.message}`);
+      return false;
+    }
+
+    await loadAdminData();
+    setCoachRefreshKey(current => current + 1);
+
+    const message = rpcDeleteSummary(data);
+    showToast(`Remove result — ${message}`);
+
+    if ((data?.deleted_completions || 0) === 0 && (data?.deleted_runs || 0) === 0 && (data?.deleted_xp || 0) === 0) {
+      alert(`Nothing was removed. ${message}`);
+    }
+
+    return true;
+  }
+
+  async function adminRemoveCoachActivity(activity, player) {
+    if (!player?.id || !activity?.id) {
+      alert("Missing player or activity ID.");
+      return false;
+    }
+
+    const ok = window.confirm(`Remove "${activity.title}" for ${player.name}? This will remove completions, run proof and XP for this activity.`);
+    if (!ok) return false;
+
+    const { data, error } = await supabase.rpc("admin_debug_remove_player_activity", {
+      target_player_id: player.id,
+      target_activity_id: activity.id,
+    });
+
+    if (error) {
+      console.error("admin_debug_remove_player_activity failed", error);
+      alert(`Remove failed: ${error.message}`);
+      return false;
+    }
+
+    await loadAdminData();
+    setCoachRefreshKey(current => current + 1);
+
+    const summary = rpcDeleteSummary(data);
+    showToast(`Remove result — ${summary}`);
+
+    if ((data?.deleted_completions || 0) === 0 && (data?.deleted_runs || 0) === 0 && (data?.deleted_xp || 0) === 0) {
+      alert(`Nothing was removed. ${summary}`);
+    }
+
+    return true;
+  }
+
   function renderCoachMode() {
     if (!coachPlayer) return null;
 
@@ -1446,6 +1617,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       .filter(row => row.player_id === coachPlayer.id)
       .reduce((sum, row) => sum + num(row.xp), 0);
     const playerBadges = badges.filter(row => row.player_id === coachPlayer.id);
+    const playerActivities = activities.filter(
+      activity => activity.squad_key === coachPlayer.squad_key
+    );
 
     return (
       <div className="coach-mode-backdrop" onClick={() => setCoachPlayer(null)}>
@@ -1457,31 +1631,30 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
             <p>{coachPlayer.name} · {displaySquad(coachPlayer.squad_key)}</p>
           </div>
 
-          <ChallengeHome
-            key={`${coachPlayer.id}-${coachRefreshKey}`}
-            supabase={supabase}
-            squadConfig={{
-              ...squadConfig,
-              key: coachPlayer.squad_key,
-              shortLabel: displaySquad(coachPlayer.squad_key),
-            }}
-            selectedPlayer={coachPlayer}
-            activeWeek={1}
-            onChangeWeek={() => {}}
-            savedRuns={playerRuns}
+          <CoachPlayerView
+            key={`${coachPlayer.id}-${coachRefreshKey}-${coachWeek}`}
+            player={coachPlayer}
+            squadLabel={displaySquad(coachPlayer.squad_key)}
+            week={coachWeek}
+            currentWeek={currentChallengeWeek}
+            activities={playerActivities}
             completions={playerCompletions}
+            runs={playerRuns}
             xpTotal={playerXp}
             badges={playerBadges}
-            onStartRun={activity => setRunActivity(activity)}
-            adminManualRuns={true}
-            onDeleteManualRun={() => {}}
+            onChangeWeek={setCoachWeek}
+            onAddRun={activity => setRunActivity(activity)}
+            onRemoveActivity={activity =>
+              adminRemoveCoachActivity(activity, coachPlayer)
+            }
             onToggleActivity={async (activity, existingCompletion) => {
               const saved = await adminToggleActivity(activity, existingCompletion, coachPlayer);
               if (saved) setCoachRefreshKey(current => current + 1);
             }}
-            onSubmitApproval={(activity, type) =>
-              adminSubmitApproval(activity, type, coachPlayer)
+            onApproveActivity={(activity, completion) =>
+              adminCoachApproveActivity(activity, completion, coachPlayer)
             }
+            onUnapproveActivity={adminCoachUnapproveActivity}
           />
 
           {runActivity ? (
@@ -1511,7 +1684,6 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (activeTab === "players") return renderPlayers();
     if (activeTab === "plans") return renderPlans();
     if (activeTab === "leaderboard") return renderLeaderboard();
-    if (activeTab === "settings") return renderSettings();
     return renderOverview();
   }
 

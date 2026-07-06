@@ -22,6 +22,9 @@ import AdminHome from "./components/admin/AdminHome";
 
 const SUPER_ADMIN_EMAILS = ["e.t.archbold@gmail.com"];
 const TEST_SQUAD_ADMIN_EMAILS = ["e.t.archbold+admin@gmail.com"];
+const SINGLE_SQUAD_ADMIN_EMAILS = {
+  "lee@ssa.ie": ["2017-girls"],
+};
 
 
 function NavIcon({ name }) {
@@ -104,13 +107,21 @@ export default function App() {
 
   // Super admin can see All Squads and switch squads.
   // Normal/test squad admins only see the single selected squad dashboard.
+  const singleSquadAdminKeys = SINGLE_SQUAD_ADMIN_EMAILS[userEmail] || [];
+
   const availableAdminKeys = effectiveIsSuperAdmin
     ? ["2014-boys", "2015-girls", "2017-boys", "2017-girls"]
-    : isTestSquadAdmin
-      ? [squadKey]
-      : adminKeys;
+    : singleSquadAdminKeys.length
+      ? singleSquadAdminKeys
+      : isTestSquadAdmin
+        ? [squadKey]
+        : adminKeys;
 
-  const isAdmin = isAdminForSquad(roles, squadConfig) || effectiveIsSuperAdmin || isTestSquadAdmin;
+  const isAdmin =
+    isAdminForSquad(roles, squadConfig) ||
+    effectiveIsSuperAdmin ||
+    isTestSquadAdmin ||
+    singleSquadAdminKeys.includes(squadKey);
   const canUseAdminSelector = effectiveIsSuperAdmin && availableAdminKeys.length > 1;
 
   async function signOut() {

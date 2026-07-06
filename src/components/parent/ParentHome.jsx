@@ -37,6 +37,7 @@ function xpForActivity(activity, completionType = "activity") {
   if (activity?.activity_key === "fitness") return 2;
   if (activity?.activity_key === "squad-session") return 4;
   if (activity?.activity_key === "bonus") return 4;
+  if (activity?.activity_key === "recovery") return 1;
 
   return 1;
 }
