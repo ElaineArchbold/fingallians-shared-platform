@@ -3,8 +3,9 @@ import { useWeeklyActivities } from "../../hooks/useWeeklyActivities";
 import SkillCardModal from "./SkillCardModal";
 import RunProofModal from "./RunProofModal";
 import MyBadgesModal from "./MyBadgesModal";
+import { getCurrentChallengeWeek, clampChallengeWeek } from "../../lib/challengeWeeks";
 
-const CURRENT_WEEK = 1;
+const CURRENT_WEEK = getCurrentChallengeWeek();
 
 function isGirlsSquad(squadKey = "") {
   return squadKey.includes("girls");
@@ -111,7 +112,7 @@ export default function ChallengeHome({
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
 
-  const safeWeek = Math.min(Number(activeWeek || CURRENT_WEEK), CURRENT_WEEK);
+  const safeWeek = clampChallengeWeek(activeWeek, CURRENT_WEEK);
 
   const { activities, activitiesLoaded } = useWeeklyActivities(
     supabase,
@@ -261,10 +262,13 @@ export default function ChallengeHome({
         </div>
       </section>
 
-      <button className="my-badges-button" onClick={() => setShowBadges(true)}>
-        <span>🏅</span>
-        <strong>My Badges</strong>
-        <small>{badges.length} earned</small>
+      <button className="my-badges-button badge-feature-card" onClick={() => setShowBadges(true)}>
+        <span className="badge-feature-icon">🏅</span>
+        <div>
+          <strong>{badges.length} Badge{badges.length === 1 ? "" : "s"} Earned</strong>
+          <small>View your collection</small>
+        </div>
+        <em>›</em>
       </button>
 
       <section className="week-nav-card">
@@ -277,7 +281,7 @@ export default function ChallengeHome({
 
         <div>
           <strong>Week {safeWeek}</strong>
-          <span>{safeWeek === CURRENT_WEEK ? "Current week" : "Previous week"}</span>
+          <span>{safeWeek === CURRENT_WEEK ? "Current week" : `Week ${safeWeek}`}</span>
         </div>
 
         <button
@@ -337,12 +341,11 @@ export default function ChallengeHome({
             </div>
           </div>
 
-          <p className="mission-snapshot-foot">
-            {awaitingCount
-              ? `${awaitingCount} mission${awaitingCount === 1 ? "" : "s"} awaiting approval and shown in amber. `
-              : ""}
-            Friday Night Hurling is a bonus and does not affect 100%.
-          </p>
+          {awaitingCount ? (
+            <p className="mission-snapshot-foot">
+              {awaitingCount} mission{awaitingCount === 1 ? "" : "s"} awaiting coach approval.
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -541,6 +544,20 @@ export default function ChallengeHome({
                         />
                       </div>
                     )}
+
+                    {item.skill_card_path ? (
+                      <button
+                        className="button secondary squad-skill-card-link"
+                        onClick={() =>
+                          setOpenSkillCard({
+                            title: item.skill_card_title || item.title,
+                            pdf: item.skill_card_path,
+                          })
+                        }
+                      >
+                        📖 Skill Card
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>

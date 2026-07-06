@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { getSquadWhatsAppLink } from "../../lib/squadLinks";
 import SkillCardModal from "./SkillCardModal";
+import { getCurrentChallengeWeek, TOTAL_CHALLENGE_WEEKS } from "../../lib/challengeWeeks";
 
-const CURRENT_WEEK = 1;
+const CURRENT_WEEK = getCurrentChallengeWeek();
 
 const BADGE_PREVIEW = [
   { badge_key: "first_mission", badge_label: "First Mission", icon: "⭐" },
@@ -149,11 +149,10 @@ export default function ProgressHome({
   onOpenWeek,
 }) {
   const [activeTab, setActiveTab] = useState("journey");
-  const [selectedWeek, setSelectedWeek] = useState(CURRENT_WEEK);
+  const [selectedWeek, setSelectedWeek] = useState(() => getCurrentChallengeWeek());
   const [previewWeek, setPreviewWeek] = useState(null);
   const [openSkillCard, setOpenSkillCard] = useState(null);
 
-  const whatsappLink = getSquadWhatsAppLink(squadConfig.key);
 
   const weekNumbers = useMemo(() => {
     return [...new Set((activities || []).map(activity => activity.week_number))]
@@ -219,7 +218,16 @@ export default function ProgressHome({
     completion => completion.status === "completed"
   );
 
-  const distanceRanKm = savedRuns.reduce(
+  const uniqueRunProofs = Array.from(
+    new Map(
+      savedRuns.map(run => [
+        run.activity_id || run.task_key || `${run.week || ""}-${run.run_index || ""}-${run.label || ""}-${run.saved_at || ""}`,
+        run,
+      ])
+    ).values()
+  );
+
+  const distanceRanKm = uniqueRunProofs.reduce(
     (total, run) => total + Number(run.distance_km || 0),
     0
   );
@@ -530,20 +538,7 @@ export default function ProgressHome({
 
         {activeTab === "plan" ? (
           <div className="parent-journey-panel">
-            {whatsappLink ? (
-              <a
-                className="whatsapp-card-button"
-                href={whatsappLink}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <h2>💬 Squad WhatsApp</h2>
-                <p>Use the squad group for reminders, proof posts and coach updates.</p>
-                <strong>Open WhatsApp Group</strong>
-              </a>
-            ) : null}
-
-            <div className="parent-progress-card">
+<div className="parent-progress-card">
               <h2>Summer Plan</h2>
               <p className="muted">
                 Parents can preview future weeks. Current and previous weeks open on

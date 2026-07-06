@@ -147,9 +147,6 @@ export default function SettingsHome({
   }
 
   function confirmSignOut() {
-    const ok = window.confirm("Are you sure you want to sign out?");
-    if (!ok) return;
-
     onSignOut?.();
   }
 

@@ -52,9 +52,18 @@ export default function MyBadgesModal({ badges = [], onClose }) {
           <h2>My Badges</h2>
           <p>
             {badges.length
-              ? `${badges.length} badge${badges.length === 1 ? "" : "s"} earned so far.`
+              ? `${badges.length} badge${badges.length === 1 ? "" : "s"} earned so far. Keep collecting!`
               : "Complete missions to start earning badges."}
           </p>
+
+          <div className="next-badge-strip">
+            <strong>Next up</strong>
+            <span>
+              {lockedBadges[0]
+                ? `${lockedBadges[0].icon} ${lockedBadges[0].badge_label}`
+                : "🏆 Collection complete"}
+            </span>
+          </div>
         </div>
 
         <section className="badges-modal-section">

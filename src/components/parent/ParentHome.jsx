@@ -5,8 +5,9 @@ import SettingsHome from "./SettingsHome";
 import RunLoggerModal from "./RunLoggerModal";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
 import { playCompleteDing } from "../../lib/sounds";
+import { getCurrentChallengeWeek, clampChallengeWeek } from "../../lib/challengeWeeks";
 
-const CURRENT_WEEK = 1;
+const CURRENT_WEEK = getCurrentChallengeWeek();
 
 function getPlayerInitials(name = "") {
   return name
@@ -35,7 +36,7 @@ function xpForActivity(activity, completionType = "activity") {
   }
 
   if (activity?.activity_key === "fitness") return 2;
-  if (activity?.activity_key === "squad-session") return 3;
+  if (activity?.activity_key === "squad-session") return 4;
   if (activity?.activity_key === "bonus") return 4;
 
   return 1;
@@ -60,7 +61,7 @@ export default function ParentHome({
   const [linking, setLinking] = useState(false);
   const [localPlayers, setLocalPlayers] = useState(players || []);
   const [allLinkedPlayers, setAllLinkedPlayers] = useState(players || []);
-  const [challengeWeek, setChallengeWeek] = useState(CURRENT_WEEK);
+  const [challengeWeek, setChallengeWeek] = useState(() => getCurrentChallengeWeek());
   const [runActivity, setRunActivity] = useState(null);
   const [savedRuns, setSavedRuns] = useState([]);
   const [completions, setCompletions] = useState([]);
@@ -651,7 +652,7 @@ export default function ParentHome({
   }
 
   function openWeekFromProgress(week) {
-    setChallengeWeek(Math.min(Number(week || CURRENT_WEEK), CURRENT_WEEK));
+    setChallengeWeek(clampChallengeWeek(week));
     onChangeParentView("challenge");
   }
 

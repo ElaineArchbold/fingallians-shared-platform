@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-function buildPdfUrl(pdf, page) {
+function buildPdfUrl(pdf, page, fitMode) {
   const safePage = Math.max(1, Number(page || 1));
-  return `${pdf}#page=${safePage}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+  const view = fitMode === "width" ? "FitH" : "Fit";
+  return `${pdf}#page=${safePage}&toolbar=0&navpanes=0&scrollbar=0&view=${view}`;
 }
 
 export default function SkillCardModal({ title, pdf, onClose }) {
   const [page, setPage] = useState(1);
+  const [fitMode, setFitMode] = useState("page");
 
-  const pdfUrl = useMemo(() => buildPdfUrl(pdf, page), [pdf, page]);
+  const pdfUrl = useMemo(() => buildPdfUrl(pdf, page, fitMode), [pdf, page, fitMode]);
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -23,10 +25,10 @@ export default function SkillCardModal({ title, pdf, onClose }) {
 
   return (
     <div className="skill-modal-backdrop" onClick={onClose}>
-      <div className="skill-modal" onClick={event => event.stopPropagation()}>
+      <div className="skill-modal skill-modal-fit" onClick={event => event.stopPropagation()}>
         <div className="skill-modal-header">
           <div>
-            <p>Skill Card</p>
+            <span>📄 Skill Card</span>
             <h2>{title}</h2>
           </div>
 
@@ -35,32 +37,33 @@ export default function SkillCardModal({ title, pdf, onClose }) {
           </button>
         </div>
 
-        <div className="skill-card-viewer">
-          <iframe
-            key={pdfUrl}
-            title={title}
-            src={pdfUrl}
-            className="skill-card-frame"
-          />
-        </div>
-
-        <div className="skill-modal-footer">
+        <div className="skill-modal-controls">
           <button
             className="button secondary"
-            disabled={page <= 1}
             onClick={() => setPage(current => Math.max(1, current - 1))}
           >
-            ← Previous
+            ←
           </button>
 
           <strong>Page {page}</strong>
 
           <button
-            className="button primary"
+            className="button secondary"
             onClick={() => setPage(current => current + 1)}
           >
-            Next →
+            →
           </button>
+
+          <button
+            className="button secondary fit-toggle"
+            onClick={() => setFitMode(current => (current === "page" ? "width" : "page"))}
+          >
+            {fitMode === "page" ? "Fit Width" : "Fit Page"}
+          </button>
+        </div>
+
+        <div className="skill-pdf-frame">
+          <iframe src={pdfUrl} title={title} />
         </div>
       </div>
     </div>
