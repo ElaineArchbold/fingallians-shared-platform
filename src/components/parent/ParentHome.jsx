@@ -69,6 +69,7 @@ export default function ParentHome({
   const [xpTotal, setXpTotal] = useState(0);
   const [xpTransactions, setXpTransactions] = useState([]);
   const [badges, setBadges] = useState([]);
+  const [squadRank, setSquadRank] = useState(null);
   const [showChildSwitcher, setShowChildSwitcher] = useState(false);
 
   const { weeks } = useAllWeeklyActivities(supabase, squadConfig.key);
@@ -208,11 +209,18 @@ export default function ParentHome({
   }
 
   async function refreshPlayerData(playerId) {
+    const playerForRank =
+      selectedPlayer?.id === playerId
+        ? selectedPlayer
+        : localPlayers.find(player => player.id === playerId) ||
+          allLinkedPlayers.find(player => player.id === playerId);
+
     await Promise.all([
       loadSavedRuns(playerId),
       loadCompletions(playerId),
       loadXp(playerId),
       loadBadges(playerId),
+      loadSquadRank(playerForRank),
     ]);
   }
 
@@ -265,6 +273,70 @@ export default function ParentHome({
 
     setXpTransactions(data || []);
     setXpTotal((data || []).reduce((total, row) => total + Number(row.xp || 0), 0));
+  }
+
+  async function loadSquadRank(player) {
+    if (!player?.id || !player?.squad_key) {
+      setSquadRank(null);
+      return;
+    }
+
+    const { data: squadPlayers, error: playerError } = await supabase
+      .from("players")
+      .select("id,name,squad_key")
+      .eq("squad_key", player.squad_key);
+
+    if (playerError) {
+      console.error(playerError);
+      setSquadRank(null);
+      return;
+    }
+
+    const ids = (squadPlayers || []).map(item => item.id);
+
+    if (!ids.length) {
+      setSquadRank(null);
+      return;
+    }
+
+    const { data: xpRows, error: xpError } = await supabase
+      .from("xp_transactions")
+      .select("player_id,xp")
+      .in("player_id", ids);
+
+    if (xpError) {
+      console.error(xpError);
+      setSquadRank(null);
+      return;
+    }
+
+    const totals = new Map();
+
+    ids.forEach(id => totals.set(id, 0));
+
+    (xpRows || []).forEach(row => {
+      totals.set(row.player_id, (totals.get(row.player_id) || 0) + Number(row.xp || 0));
+    });
+
+    const ranked = (squadPlayers || [])
+      .map(item => ({
+        ...item,
+        xp: totals.get(item.id) || 0,
+      }))
+      .sort((a, b) => b.xp - a.xp || a.name.localeCompare(b.name));
+
+    const index = ranked.findIndex(item => item.id === player.id);
+
+    if (index < 0) {
+      setSquadRank(null);
+      return;
+    }
+
+    setSquadRank({
+      position: index + 1,
+      total: ranked.length,
+      xp: ranked[index].xp,
+    });
   }
 
   async function loadBadges(playerId) {
@@ -536,6 +608,10 @@ export default function ParentHome({
     await maybeAwardBadges(playerId);
     await refreshPlayerData(playerId);
 
+    if (status === "completed" || status === "awaiting_approval") {
+      playCompleteDing();
+    }
+
     return data;
   }
 
@@ -574,7 +650,6 @@ export default function ParentHome({
         gpsVerified: false,
         awardPoints: true,
       });
-      playCompleteDing();
     } catch (error) {
       alert(error.message);
     }
@@ -592,7 +667,6 @@ export default function ParentHome({
         gpsVerified: false,
         awardPoints: false,
       });
-      playCompleteDing();
     } catch (error) {
       alert(error.message);
     }
@@ -645,7 +719,6 @@ export default function ParentHome({
 
     await maybeAwardBadges(result.playerId);
     await refreshPlayerData(result.playerId);
-    playCompleteDing();
     return completion;
   }
 
@@ -837,6 +910,19 @@ export default function ParentHome({
 
   return (
     <div className="page">
+      {squadRank ? (
+        <div className="home-leaderboard-position-card">
+          <span>🏆</span>
+          <div>
+            <strong>Squad Leaderboard</strong>
+            <p>
+              {selectedPlayer.name} is <b>#{squadRank.position}</b> of {squadRank.total}
+              {squadRank.xp ? ` with ${squadRank.xp} XP` : ""}.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
 <ChallengeHome
         supabase={supabase}
         squadConfig={squadConfig}
