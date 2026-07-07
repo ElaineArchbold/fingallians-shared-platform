@@ -54,6 +54,7 @@ export default function ChildHome({
     localStorage.removeItem("childSquadKey");
     window.location.href = "/";
   }
+
   const [player, setPlayer] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -213,6 +214,19 @@ export default function ChildHome({
     if (error) throw error;
   }
 
+  async function removeCompletionForActivity(playerId, activityId) {
+    const { data, error } = await supabase
+      .from("activity_completions")
+      .delete()
+      .eq("player_id", playerId)
+      .eq("activity_id", activityId)
+      .or("gps_verified.is.null,gps_verified.eq.false")
+      .select("id,player_id,activity_id,completion_type,gps_verified");
+
+    if (error) throw error;
+    return data || [];
+  }
+
   async function upsertCompletion({
     playerId,
     activity,
@@ -266,20 +280,14 @@ export default function ChildHome({
     if (!player?.id) return;
 
     if (existingCompletion) {
-      const { error } = await supabase
-        .from("activity_completions")
-        .delete()
-        .eq("player_id", player.id)
-        .eq("activity_id", activity.id)
-        .or("gps_verified.is.false,gps_verified.is.null");
-
-      if (error) {
+      try {
+        await removeCompletionForActivity(player.id, activity.id);
+        await removeXpForActivity(player.id, activity.id);
+        await refreshPlayerData(player.id);
+      } catch (error) {
         alert(error.message);
-        return;
       }
 
-      await removeXpForActivity(player.id, activity.id);
-      await refreshPlayerData(player.id);
       return;
     }
 
@@ -366,6 +374,109 @@ export default function ChildHome({
     return completion;
   }
 
+  async function deleteManualRun(run) {
+    const flowId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const playerId = run?.playerId || run?.player_id || player?.id;
+    const activityId = run?.activityId || run?.task_key || run?.activity_id;
+
+    console.groupCollapsed("[child-manual-run-delete]", flowId);
+    console.log("handler fired", { run, playerId, activityId });
+
+    if (!playerId || !activityId) {
+      console.error("Missing playerId or activityId", { playerId, activityId, run });
+      console.groupEnd();
+      alert("Could not identify the manual run to remove.");
+      return;
+    }
+
+    const ok = window.confirm("Remove this manual run and uncheck the activity?");
+
+    if (!ok) {
+      console.log("cancelled by user");
+      console.groupEnd();
+      return;
+    }
+
+    const previousSavedRuns = savedRuns;
+    const previousCompletions = completions;
+
+    setSavedRuns(current =>
+      current.filter(item =>
+        run?.id
+          ? item.id !== run.id
+          : !(
+              item.player_id === playerId &&
+              item.task_key === activityId &&
+              item.run_type === "manual"
+            )
+      )
+    );
+
+    setCompletions(current =>
+      current.filter(item => !(item.player_id === playerId && item.activity_id === activityId))
+    );
+
+    try {
+      let proofQuery = supabase
+        .from("run_proofs")
+        .delete()
+        .eq("player_id", playerId)
+        .eq("task_key", activityId)
+        .eq("run_type", "manual")
+        .select("id,player_id,task_key,run_type");
+
+      if (run?.id) {
+        proofQuery = supabase
+          .from("run_proofs")
+          .delete()
+          .eq("id", run.id)
+          .eq("player_id", playerId)
+          .eq("run_type", "manual")
+          .select("id,player_id,task_key,run_type");
+      }
+
+      const { data: deletedProofs, error: proofError } = await proofQuery;
+      if (proofError) throw proofError;
+      console.log("run_proofs deleted", deletedProofs);
+
+      if (!deletedProofs?.length) {
+        const { data: fallbackProofs, error: fallbackProofError } = await supabase
+          .from("run_proofs")
+          .delete()
+          .eq("player_id", playerId)
+          .eq("task_key", activityId)
+          .eq("run_type", "manual")
+          .select("id,player_id,task_key,run_type");
+
+        if (fallbackProofError) throw fallbackProofError;
+        console.log("run_proofs fallback deleted", fallbackProofs);
+      }
+
+      const deletedCompletions = await removeCompletionForActivity(playerId, activityId);
+      console.log("activity_completions deleted", deletedCompletions);
+
+      const { data: deletedXp, error: xpError } = await supabase
+        .from("xp_transactions")
+        .delete()
+        .eq("player_id", playerId)
+        .eq("activity_id", activityId)
+        .select("id,player_id,activity_id,xp,source");
+
+      if (xpError) throw xpError;
+      console.log("xp_transactions deleted", deletedXp);
+
+      await refreshPlayerData(playerId);
+      console.log("refresh complete");
+    } catch (error) {
+      console.error("child manual run delete failed", error);
+      setSavedRuns(previousSavedRuns);
+      setCompletions(previousCompletions);
+      alert(error?.message || "Could not remove this manual run.");
+    } finally {
+      console.groupEnd();
+    }
+  }
+
   if (loading) {
     return (
       <div className="card">
@@ -412,6 +523,7 @@ export default function ChildHome({
         onToggleActivity={handleToggleActivity}
         onSubmitApproval={handleSubmitApproval}
         onStartRun={setRunActivity}
+        onDeleteManualRun={deleteManualRun}
       />
 
       {runActivity ? (
@@ -423,6 +535,7 @@ export default function ChildHome({
             await handleRunSaved(result);
             setRunActivity(null);
           }}
+          onDeleted={deleteManualRun}
         />
       ) : null}
     </div>
