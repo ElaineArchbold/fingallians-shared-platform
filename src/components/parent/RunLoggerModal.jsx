@@ -46,6 +46,50 @@ function totalDistanceKm(points) {
     );
 }
 
+
+function buildRouteSvgPath(points, width = 500, height = 340, padding = 42) {
+  const routePoints = (points || [])
+    .map(point => ({
+      lat: Number(point?.lat),
+      lng: Number(point?.lng),
+    }))
+    .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+
+  if (routePoints.length < 2) return null;
+
+  const lats = routePoints.map(point => point.lat);
+  const lngs = routePoints.map(point => point.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+
+  const latRange = Math.max(maxLat - minLat, 0.0001);
+  const lngRange = Math.max(maxLng - minLng, 0.0001);
+  const drawableWidth = width - padding * 2;
+  const drawableHeight = height - padding * 2;
+
+  const projected = routePoints.map(point => {
+    const x = padding + ((point.lng - minLng) / lngRange) * drawableWidth;
+    const y = padding + ((maxLat - point.lat) / latRange) * drawableHeight;
+
+    return {
+      x: Number(x.toFixed(1)),
+      y: Number(y.toFixed(1)),
+    };
+  });
+
+  const path = projected
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+    .join(" ");
+
+  return {
+    path,
+    start: projected[0],
+    finish: projected[projected.length - 1],
+  };
+}
+
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -129,6 +173,10 @@ export default function RunLoggerModal({
   const latestPoint = points[points.length - 1] || null;
   const route = useMemo(() => points.map(point => [point.lat, point.lng]), [points]);
   const pace = paceFromSeconds(elapsed, distanceKm);
+  const screenshotRoute = useMemo(
+    () => buildRouteSvgPath(finishedRun?.routePoints || []),
+    [finishedRun?.routePoints]
+  );
 
   useEffect(() => {
     setMode(manualOnly ? "manual" : "gps");
@@ -733,18 +781,69 @@ export default function RunLoggerModal({
                       />
                     </g>
                     {finishedRun.type === "gps" ? (
-                      <>
-                        <circle cx="70" cy="165" r="8" fill="#b01425" />
-                        <path
-                          d="M45 165 C92 205 125 252 190 238 C258 225 274 305 308 278 C335 254 300 164 338 158 C374 152 391 232 430 190 C468 148 423 62 465 46"
-                          fill="none"
-                          stroke="#b01425"
-                          strokeWidth="8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <text x="438" y="188" fontSize="25">🏁</text>
-                      </>
+                      screenshotRoute ? (
+                        <>
+                          <path
+                            d={screenshotRoute.path}
+                            fill="none"
+                            stroke="#b01425"
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <circle
+                            cx={screenshotRoute.start.x}
+                            cy={screenshotRoute.start.y}
+                            r="8"
+                            fill="#16843d"
+                          />
+                          <circle
+                            cx={screenshotRoute.finish.x}
+                            cy={screenshotRoute.finish.y}
+                            r="10"
+                            fill="#b01425"
+                          />
+                          <text
+                            x={Math.min(476, Math.max(24, screenshotRoute.finish.x + 16))}
+                            y={Math.min(316, Math.max(24, screenshotRoute.finish.y + 8))}
+                            fontSize="25"
+                          >
+                            🏁
+                          </text>
+                        </>
+                      ) : (
+                        <>
+                          <text
+                            x="250"
+                            y="150"
+                            fontSize="48"
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                          >
+                            🏃
+                          </text>
+                          <text
+                            x="250"
+                            y="196"
+                            fontSize="24"
+                            fontWeight="900"
+                            textAnchor="middle"
+                            fill="#351b20"
+                          >
+                            GPS run saved
+                          </text>
+                          <text
+                            x="250"
+                            y="224"
+                            fontSize="16"
+                            fontWeight="700"
+                            textAnchor="middle"
+                            fill="#7a6269"
+                          >
+                            Route points were not available for this screenshot
+                          </text>
+                        </>
+                      )
                     ) : (
                       <>
                         <text
