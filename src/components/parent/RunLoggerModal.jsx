@@ -90,6 +90,48 @@ function buildRouteSvgPath(points, width = 500, height = 340, padding = 42) {
   };
 }
 
+
+function buildScreenshotMapDataUrl(run) {
+  const width = 500;
+  const height = 340;
+  const route = buildRouteSvgPath(run?.routePoints || [], width, height);
+
+  const grid = `
+    <path d="M0 68 H500 M0 136 H500 M0 204 H500 M0 272 H500" fill="none" stroke="rgba(85,140,94,0.18)" stroke-width="1"/>
+    <path d="M100 0 V340 M200 0 V340 M300 0 V340 M400 0 V340" fill="none" stroke="rgba(85,140,94,0.18)" stroke-width="1"/>
+  `;
+
+  const routeMarkup =
+    run?.type === "gps" && route
+      ? `
+        <path d="${route.path}" fill="none" stroke="#b01425" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${route.start.x}" cy="${route.start.y}" r="8" fill="#16843d"/>
+        <circle cx="${route.finish.x}" cy="${route.finish.y}" r="10" fill="#b01425"/>
+        <text x="${Math.min(476, Math.max(24, route.finish.x + 16))}" y="${Math.min(316, Math.max(24, route.finish.y + 8))}" font-size="25">🏁</text>
+      `
+      : run?.type === "gps"
+        ? `
+          <text x="250" y="150" font-size="48" text-anchor="middle">🏃</text>
+          <text x="250" y="196" font-size="24" font-weight="900" text-anchor="middle" fill="#351b20">GPS run saved</text>
+          <text x="250" y="224" font-size="16" font-weight="700" text-anchor="middle" fill="#7a6269">Route points were not available</text>
+        `
+        : `
+          <text x="250" y="150" font-size="48" text-anchor="middle">📝</text>
+          <text x="250" y="196" font-size="24" font-weight="900" text-anchor="middle" fill="#351b20">Manual run entry</text>
+          <text x="250" y="224" font-size="16" font-weight="700" text-anchor="middle" fill="#7a6269">No GPS route recorded</text>
+        `;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect width="500" height="340" fill="#e8f6e9"/>
+      ${grid}
+      ${routeMarkup}
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -173,9 +215,9 @@ export default function RunLoggerModal({
   const latestPoint = points[points.length - 1] || null;
   const route = useMemo(() => points.map(point => [point.lat, point.lng]), [points]);
   const pace = paceFromSeconds(elapsed, distanceKm);
-  const screenshotRoute = useMemo(
-    () => buildRouteSvgPath(finishedRun?.routePoints || []),
-    [finishedRun?.routePoints]
+  const screenshotMapSrc = useMemo(
+    () => buildScreenshotMapDataUrl(finishedRun),
+    [finishedRun]
   );
 
   useEffect(() => {
@@ -654,11 +696,25 @@ export default function RunLoggerModal({
   async function makeScreenshotFile() {
     if (!cardRef.current) return null;
 
+    const images = Array.from(cardRef.current.querySelectorAll("img"));
+
+    await Promise.all(
+      images.map(image => {
+        if (image.complete) return Promise.resolve();
+
+        return new Promise(resolve => {
+          image.onload = resolve;
+          image.onerror = resolve;
+        });
+      })
+    );
+
     const blob = await htmlToImage.toBlob(cardRef.current, {
       cacheBust: true,
       pixelRatio: 2,
       backgroundColor: "#fffaf4",
       skipFonts: true,
+      filter: node => !node.classList?.contains("leaflet-container"),
     });
 
     return new File(
@@ -758,126 +814,23 @@ export default function RunLoggerModal({
 
                 <div
                   className="challenge-run-card-map"
-                  style={{ backgroundColor: "#e8f6e9", border: "1px solid #d5ead7" }}
+                  style={{
+                    backgroundColor: "#e8f6e9",
+                    border: "1px solid #d5ead7",
+                    overflow: "hidden",
+                  }}
                 >
-                  <svg
-                    viewBox="0 0 500 340"
-                    preserveAspectRatio="none"
-                    style={{ display: "block", backgroundColor: "#e8f6e9" }}
-                  >
-                    <rect width="500" height="340" fill="#e8f6e9" />
-                    <g>
-                      <path
-                        d="M0 68 H500 M0 136 H500 M0 204 H500 M0 272 H500"
-                        fill="none"
-                        stroke="rgba(85, 140, 94, 0.18)"
-                        strokeWidth="1"
-                      />
-                      <path
-                        d="M100 0 V340 M200 0 V340 M300 0 V340 M400 0 V340"
-                        fill="none"
-                        stroke="rgba(85, 140, 94, 0.18)"
-                        strokeWidth="1"
-                      />
-                    </g>
-                    {finishedRun.type === "gps" ? (
-                      screenshotRoute ? (
-                        <>
-                          <path
-                            d={screenshotRoute.path}
-                            fill="none"
-                            stroke="#b01425"
-                            strokeWidth="8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <circle
-                            cx={screenshotRoute.start.x}
-                            cy={screenshotRoute.start.y}
-                            r="8"
-                            fill="#16843d"
-                          />
-                          <circle
-                            cx={screenshotRoute.finish.x}
-                            cy={screenshotRoute.finish.y}
-                            r="10"
-                            fill="#b01425"
-                          />
-                          <text
-                            x={Math.min(476, Math.max(24, screenshotRoute.finish.x + 16))}
-                            y={Math.min(316, Math.max(24, screenshotRoute.finish.y + 8))}
-                            fontSize="25"
-                          >
-                            🏁
-                          </text>
-                        </>
-                      ) : (
-                        <>
-                          <text
-                            x="250"
-                            y="150"
-                            fontSize="48"
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                          >
-                            🏃
-                          </text>
-                          <text
-                            x="250"
-                            y="196"
-                            fontSize="24"
-                            fontWeight="900"
-                            textAnchor="middle"
-                            fill="#351b20"
-                          >
-                            GPS run saved
-                          </text>
-                          <text
-                            x="250"
-                            y="224"
-                            fontSize="16"
-                            fontWeight="700"
-                            textAnchor="middle"
-                            fill="#7a6269"
-                          >
-                            Route points were not available for this screenshot
-                          </text>
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <text
-                          x="250"
-                          y="150"
-                          fontSize="48"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                        >
-                          📝
-                        </text>
-                        <text
-                          x="250"
-                          y="196"
-                          fontSize="24"
-                          fontWeight="900"
-                          textAnchor="middle"
-                          fill="#351b20"
-                        >
-                          Manual run entry
-                        </text>
-                        <text
-                          x="250"
-                          y="224"
-                          fontSize="16"
-                          fontWeight="700"
-                          textAnchor="middle"
-                          fill="#7a6269"
-                        >
-                          No GPS route recorded
-                        </text>
-                      </>
-                    )}
-                  </svg>
+                  <img
+                    src={screenshotMapSrc}
+                    alt="Run route map"
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      backgroundColor: "#e8f6e9",
+                    }}
+                  />
                 </div>
 
                 <div className="challenge-run-card-stats">
