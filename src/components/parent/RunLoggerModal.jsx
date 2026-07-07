@@ -4,49 +4,6 @@ import * as htmlToImage from "html-to-image";
 
 const DEFAULT_CENTER = [53.389, -6.246];
 
-const COACH_TIPS = [
-  {
-    icon: "🧡",
-    title: "Listen to your body",
-    text: "Some days you feel full of energy and some days you don't. That's okay — just do your best today.",
-    water: "Have you had enough water today? Drink some before your run and again afterwards.",
-  },
-  {
-    icon: "🌟",
-    title: "Every step counts",
-    text: "You don't have to do it all at once. Split the run into two shorter runs if you need to.",
-    water: "A little drink before you start can help your body feel ready.",
-  },
-  {
-    icon: "🏃",
-    title: "Pace yourself",
-    text: "A steady run is better than a fast start. Save some energy for the finish!",
-    water: "Remember to drink water when you get home too.",
-  },
-  {
-    icon: "👟",
-    title: "Warm up first",
-    text: "Walk for a minute or two before you start running to wake up your muscles.",
-    water: "Water helps your muscles work well. Have a few sips before you go.",
-  },
-  {
-    icon: "💪",
-    title: "Champions recover too",
-    text: "Do your best, take breaks when you need them, and be proud of every kilometre you complete!",
-    water: "Have you had enough water today? Your body will thank you.",
-  },
-  {
-    icon: "😊",
-    title: "Enjoy it",
-    text: "Running outside is a chance to enjoy the fresh air. Look around, breathe calmly, and have fun.",
-    water: "Take a drink before your run and another one afterwards.",
-  },
-];
-
-function pickCoachTip() {
-  return COACH_TIPS[Math.floor(Math.random() * COACH_TIPS.length)];
-}
-
 function toRad(value) {
   return (value * Math.PI) / 180;
 }
@@ -116,7 +73,7 @@ export default function RunLoggerModal({
   onSaved,
   manualOnly = false,
 }) {
-  const [mode, setMode] = useState(manualOnly ? "manual" : "gps");
+  const [mode, setMode] = useState("gps");
   const [tracking, setTracking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [finishedRun, setFinishedRun] = useState(null);
@@ -124,12 +81,11 @@ export default function RunLoggerModal({
   const [gpsStatus, setGpsStatus] = useState("Ready to start.");
   const [elapsed, setElapsed] = useState(0);
   const [points, setPoints] = useState([]);
-  const [showFinishChoice, setShowFinishChoice] = useState(false);
+  const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [holdPercent, setHoldPercent] = useState(0);
-  const [showRunConfetti, setShowRunConfetti] = useState(false);
-  const [showCoachTip, setShowCoachTip] = useState(true);
-  const [coachTip] = useState(() => pickCoachTip());
+  const [countdownStep, setCountdownStep] = useState("");
+  const [showStartCoachNote, setShowStartCoachNote] = useState(false);
 
   const [manualDistance, setManualDistance] = useState(
     activity?.target_unit === "km" ? String(activity.target_value || "") : ""
@@ -140,11 +96,11 @@ export default function RunLoggerModal({
   const timerRef = useRef(null);
   const pointsRef = useRef([]);
   const pausedRef = useRef(false);
-  const trackingRef = useRef(false);
   const holdStartRef = useRef(null);
   const holdFrameRef = useRef(null);
   const cardRef = useRef(null);
-  const lastTickRef = useRef(Date.now());
+  const countdownTimeoutRef = useRef(null);
+  const coachNoteTimeoutRef = useRef(null);
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
@@ -154,188 +110,215 @@ export default function RunLoggerModal({
   const pace = paceFromSeconds(elapsed, distanceKm);
 
   useEffect(() => {
-    return () => {
-      stopTracking();
-      cancelHoldFinish();
-    };
-  }, []);
-
-  useEffect(() => {
     function blockRefresh(event) {
-      if (!trackingRef.current) return;
+      if (!tracking) return;
       event.preventDefault();
       event.returnValue = "";
     }
 
-    function handleVisibilityChange() {
-      if (!trackingRef.current || pausedRef.current) return;
-
-      const now = Date.now();
-      if (!document.hidden) {
-        lastTickRef.current = now;
-      }
-    }
-
     window.addEventListener("beforeunload", blockRefresh);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("beforeunload", blockRefresh);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      stopTracking();
+      cancelHoldFinish();
     };
-  }, []);
+  }, [tracking]);
 
   function stopTracking() {
-    if (watchRef.current !== null) {
+    if (watchRef.current) {
       navigator.geolocation.clearWatch(watchRef.current);
       watchRef.current = null;
     }
 
-    if (timerRef.current !== null) {
+    if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
 
-    trackingRef.current = false;
-    pausedRef.current = false;
-  }
+    if (countdownTimeoutRef.current) {
+      clearTimeout(countdownTimeoutRef.current);
+      countdownTimeoutRef.current = null;
+    }
 
-  function resetGpsState() {
-    stopTracking();
-    cancelHoldFinish();
-    setTracking(false);
-    setPaused(false);
-    setShowFinishChoice(false);
-    setShowDiscardConfirm(false);
-    setHoldPercent(0);
-    setElapsed(0);
-    setPoints([]);
-    pointsRef.current = [];
-    setGpsStatus("Ready to start.");
+    if (coachNoteTimeoutRef.current) {
+      clearTimeout(coachNoteTimeoutRef.current);
+      coachNoteTimeoutRef.current = null;
+    }
   }
 
   function requestClose() {
-    if (trackingRef.current) {
-      setShowDiscardConfirm(true);
+    if (tracking) {
+      alert("Your run is still tracking. Hold to finish before closing.");
       return;
     }
 
-    onClose?.();
+    onClose();
+  }
+
+  function playCountdownTone(step) {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = step === "GO!" ? "square" : "sine";
+      oscillator.frequency.value =
+        step === "READY" ? 360 : step === "SET" ? 520 : 780;
+
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.24, context.currentTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.34);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.36);
+
+      oscillator.onended = () => context.close?.();
+    } catch {
+      // Sound is a bonus only. Some phones block audio until after interaction.
+    }
+  }
+
+  function startTrafficLightCountdown() {
+    if (!navigator.geolocation) {
+      setGpsStatus("GPS is not available. Use manual entry instead.");
+      setMode("manual");
+      return;
+    }
+
+    if (countdownStep || tracking) return;
+
+    const steps = ["READY", "SET", "GO!"];
+
+    steps.forEach((step, index) => {
+      countdownTimeoutRef.current = setTimeout(() => {
+        setCountdownStep(step);
+        playCountdownTone(step);
+
+        if (step === "GO!") {
+          countdownTimeoutRef.current = setTimeout(() => {
+            setCountdownStep("");
+            startGps();
+          }, 700);
+        }
+      }, index * 900);
+    });
+  }
+
+  function dismissCoachNoteAndStart() {
+    if (coachNoteTimeoutRef.current) {
+      clearTimeout(coachNoteTimeoutRef.current);
+      coachNoteTimeoutRef.current = null;
+    }
+
+    setShowStartCoachNote(false);
+    startTrafficLightCountdown();
+  }
+
+  function beginStartCountdown() {
+    if (!navigator.geolocation) {
+      setGpsStatus("GPS is not available. Use manual entry instead.");
+      setMode("manual");
+      return;
+    }
+
+    if (countdownStep || tracking || showStartCoachNote) return;
+
+    setShowStartCoachNote(true);
+
+    coachNoteTimeoutRef.current = setTimeout(() => {
+      dismissCoachNoteAndStart();
+    }, 5000);
   }
 
   function startGps() {
-    if (manualOnly) {
-      setMode("manual");
-      return;
-    }
-
-    if (trackingRef.current || saving) return;
-
     if (!navigator.geolocation) {
-      setGpsStatus("GPS is not available on this device. Use manual entry instead.");
+      setGpsStatus("GPS is not available. Use manual entry instead.");
       setMode("manual");
       return;
     }
 
-    setShowCoachTip(false);
-    setPoints([]);
-    pointsRef.current = [];
-    setElapsed(0);
+    setTracking(true);
     setPaused(false);
     pausedRef.current = false;
-    trackingRef.current = true;
-    lastTickRef.current = Date.now();
-    setTracking(true);
-    setShowFinishChoice(false);
-    setShowDiscardConfirm(false);
-    setGpsStatus("Requesting location permission…");
+    setGpsStatus("Finding GPS signal…");
 
     timerRef.current = setInterval(() => {
-      if (pausedRef.current) return;
-
-      const now = Date.now();
-      const delta = Math.max(1, Math.round((now - lastTickRef.current) / 1000));
-      lastTickRef.current = now;
-      setElapsed(value => value + delta);
+      if (!pausedRef.current) {
+        setElapsed(value => value + 1);
+      }
     }, 1000);
 
-    function addPoint(position) {
-      if (pausedRef.current) return;
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const firstPoint = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          acc: Number(position.coords.accuracy || 999),
+          ts: Date.now(),
+        };
 
-      const accuracy = Number(position.coords.accuracy || 999);
-
-      const nextPoint = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-        acc: accuracy,
-        ts: Date.now(),
-      };
-
-      if (!Number.isFinite(nextPoint.lat) || !Number.isFinite(nextPoint.lng)) {
-        setGpsStatus("GPS gave an invalid location. Keep moving in open sky.");
-        return;
-      }
-
-      if (accuracy > 120) {
-        setGpsStatus(`Weak GPS signal (${Math.round(accuracy)}m). Keep moving in open sky.`);
-        return;
-      }
-
-      setPoints(previous => {
-        const last = previous[previous.length - 1];
-
-        if (last) {
-          const segmentKm = distanceBetween(last, nextPoint);
-          const seconds = Math.max(1, (nextPoint.ts - last.ts) / 1000);
-          const speedKmh = segmentKm / (seconds / 3600);
-
-          if (segmentKm < 0.003) return previous;
-
-          if (segmentKm > 0.75 && speedKmh > 35) {
-            setGpsStatus("Ignored one jumpy GPS point. Still tracking.");
-            return previous;
-          }
-        }
-
-        const updated = [...previous, nextPoint];
-        pointsRef.current = updated;
-        setGpsStatus(`GPS active · accuracy ${Math.round(accuracy)}m`);
-        return updated;
-      });
-    }
-
-    function handleGpsError(error) {
-      console.error(error);
-
-      if (error.code === 1) {
-        setGpsStatus("Location permission was denied. Use manual entry or allow location access.");
-        stopTracking();
-        setTracking(false);
-        return;
-      }
-
-      if (error.code === 2) {
-        setGpsStatus("Location is unavailable. The tracker will reconnect when GPS returns.");
-        return;
-      }
-
-      if (error.code === 3) {
-        setGpsStatus("Still finding GPS. Keep going — it will connect your last and next good point.");
-        return;
-      }
-
-      setGpsStatus("GPS signal dropped. Keep moving — it should reconnect.");
-    }
-
-    navigator.geolocation.getCurrentPosition(addPoint, handleGpsError, {
-      enableHighAccuracy: true,
-      timeout: 20000,
-      maximumAge: 0,
-    });
+        setPoints([firstPoint]);
+        pointsRef.current = [firstPoint];
+        setGpsStatus(`GPS active · accuracy ${Math.round(firstPoint.acc)}m`);
+      },
+      () => {
+        setGpsStatus("Waiting for GPS fix…");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 1000 }
+    );
 
     watchRef.current = navigator.geolocation.watchPosition(
-      addPoint,
-      handleGpsError,
+      position => {
+        if (pausedRef.current) return;
+
+        const accuracy = Number(position.coords.accuracy || 999);
+
+        const nextPoint = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          acc: accuracy,
+          ts: Date.now(),
+        };
+
+        if (!Number.isFinite(nextPoint.lat) || !Number.isFinite(nextPoint.lng)) return;
+
+        if (accuracy > 80) {
+          setGpsStatus(`Weak GPS signal (${Math.round(accuracy)}m). Keep moving in open sky.`);
+          return;
+        }
+
+        setPoints(previous => {
+          const last = previous[previous.length - 1];
+
+          if (last) {
+            const segmentKm = distanceBetween(last, nextPoint);
+            const seconds = Math.max(1, (nextPoint.ts - last.ts) / 1000);
+            const speedKmh = segmentKm / (seconds / 3600);
+
+            if (segmentKm < 0.003) return previous;
+
+            if (segmentKm > 0.35 && speedKmh > 28) {
+              setGpsStatus("Ignored one jumpy GPS point. Still tracking.");
+              return previous;
+            }
+          }
+
+          const updated = [...previous, nextPoint];
+          pointsRef.current = updated;
+          setGpsStatus(`GPS active · accuracy ${Math.round(accuracy)}m`);
+          return updated;
+        });
+      },
+      error => {
+        console.error(error);
+        setGpsStatus("GPS signal dropped. Keep moving — it should reconnect.");
+      },
       {
         enableHighAccuracy: true,
         maximumAge: 1000,
@@ -345,32 +328,26 @@ export default function RunLoggerModal({
   }
 
   function togglePause() {
-    if (!trackingRef.current) return;
-
     pausedRef.current = !pausedRef.current;
     setPaused(pausedRef.current);
-    lastTickRef.current = Date.now();
-    setGpsStatus(pausedRef.current ? "Paused." : "GPS active again.");
   }
 
   function startHoldFinish(event) {
     event.preventDefault();
-    if (saving || showFinishChoice || !trackingRef.current) return;
+    if (saving || showConfirmFinish) return;
 
     holdStartRef.current = Date.now();
     setHoldPercent(0);
 
     function tick() {
-      if (!holdStartRef.current) return;
-
       const elapsedHold = Date.now() - holdStartRef.current;
-      const percent = Math.min(100, Math.round((elapsedHold / 1500) * 100));
+      const percent = Math.min(100, Math.round((elapsedHold / 2000) * 100));
 
       setHoldPercent(percent);
 
       if (percent >= 100) {
         cancelHoldFinish(false);
-        setShowFinishChoice(true);
+        setShowConfirmFinish(true);
         return;
       }
 
@@ -391,71 +368,20 @@ export default function RunLoggerModal({
     if (reset) setHoldPercent(0);
   }
 
-  function playRunDing() {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-
-      const audio = new AudioContext();
-      const now = audio.currentTime;
-
-      const notes = [
-        { frequency: 523.25, start: 0, duration: 0.08 },
-        { frequency: 659.25, start: 0.08, duration: 0.08 },
-        { frequency: 783.99, start: 0.16, duration: 0.12 },
-      ];
-
-      notes.forEach(note => {
-        const oscillator = audio.createOscillator();
-        const gain = audio.createGain();
-
-        oscillator.type = "triangle";
-        oscillator.frequency.setValueAtTime(note.frequency, now + note.start);
-
-        gain.gain.setValueAtTime(0.0001, now + note.start);
-        gain.gain.exponentialRampToValueAtTime(0.18, now + note.start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
-
-        oscillator.connect(gain);
-        gain.connect(audio.destination);
-
-        oscillator.start(now + note.start);
-        oscillator.stop(now + note.start + note.duration + 0.03);
-      });
-
-      setTimeout(() => audio.close?.(), 700);
-    } catch {
-      // Audio is optional.
-    }
-  }
-
-  function celebrateRunSaved() {
-    playRunDing();
-    setShowRunConfetti(true);
-    setTimeout(() => setShowRunConfetti(false), 1400);
-  }
-
   async function finishGps() {
     if (!selectedPlayer?.id) {
       alert("Select a player first.");
       return;
     }
 
-    if (!pointsRef.current.length) {
-      alert("No GPS points were recorded yet. Keep moving for a few seconds or discard this run.");
-      return;
-    }
-
     if (targetKm && distanceKm < targetKm) {
-      alert(`This GPS run is ${distanceKm.toFixed(2)} km. The target is ${targetKm.toFixed(2)} km, so it cannot be saved yet.`);
-      setShowFinishChoice(false);
-      setHoldPercent(0);
+      alert(`Keep going — you need ${(targetKm - distanceKm).toFixed(2)} km more.`);
       return;
     }
 
     stopTracking();
     setTracking(false);
-    setShowFinishChoice(false);
+    setShowConfirmFinish(false);
     setSaving(true);
 
     const saved = {
@@ -468,27 +394,33 @@ export default function RunLoggerModal({
       durationMin: Math.max(1, Math.round(elapsed / 60)),
       pace,
       pointCount: pointsRef.current.length,
-      routePoints: pointsRef.current.map(point => ({
-        lat: point.lat,
-        lng: point.lng,
-        acc: point.acc || null,
-        ts: point.ts || null,
-      })),
+      routePoints: pointsRef.current,
       savedAt: new Date().toISOString(),
       locked: true,
     };
 
     try {
-      await onSaved?.(saved);
-      celebrateRunSaved();
+      await onSaved(saved);
       setFinishedRun(saved);
     } catch (error) {
       alert(error?.message || "Could not save this run.");
-      setTracking(true);
-      trackingRef.current = true;
     } finally {
       setSaving(false);
     }
+  }
+
+  function discardGpsRun() {
+    stopTracking();
+    setTracking(false);
+    setPaused(false);
+    pausedRef.current = false;
+    setShowConfirmFinish(false);
+    setShowDiscardConfirm(false);
+    setHoldPercent(0);
+    setElapsed(0);
+    setPoints([]);
+    pointsRef.current = [];
+    setGpsStatus("Run discarded. Ready to start again.");
   }
 
   async function saveManual() {
@@ -505,7 +437,6 @@ export default function RunLoggerModal({
       return;
     }
 
-    setShowCoachTip(false);
     setSaving(true);
 
     const saved = {
@@ -518,14 +449,12 @@ export default function RunLoggerModal({
       durationMin: minutes || null,
       pace: distance > 0 && minutes ? paceFromSeconds(minutes * 60, distance) : null,
       pointCount: 0,
-      routePoints: null,
       savedAt: new Date().toISOString(),
       locked: false,
     };
 
     try {
-      await onSaved?.(saved);
-      celebrateRunSaved();
+      await onSaved(saved);
       setFinishedRun(saved);
     } catch (error) {
       alert(error?.message || "Could not save this manual run.");
@@ -534,8 +463,8 @@ export default function RunLoggerModal({
     }
   }
 
-  async function shareOrSaveScreenshot() {
-    if (!cardRef.current) return;
+  async function makeScreenshotFile() {
+    if (!cardRef.current) return null;
 
     const blob = await htmlToImage.toBlob(cardRef.current, {
       cacheBust: true,
@@ -543,22 +472,47 @@ export default function RunLoggerModal({
       backgroundColor: "#fffaf4",
     });
 
-    const file = new File(
+    return new File(
       [blob],
       `${selectedPlayer.name}-${activity.title}.png`,
       { type: "image/png" }
     );
+  }
+
+  async function shareScreenshot() {
+    const file = await makeScreenshotFile();
+    if (!file) return;
+
+    const shareText =
+      `${selectedPlayer.name} completed ${activity.title} in the Fingallians Fitness Challenge.`;
 
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({
         title: "Fingallians Fitness Challenge",
-        text: `${selectedPlayer.name} completed ${activity.title}`,
+        text: shareText,
         files: [file],
       });
       return;
     }
 
-    const url = URL.createObjectURL(blob);
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function saveScreenshot() {
+    const file = await makeScreenshotFile();
+    if (!file) return;
+
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({
+        title: "Save Run Screenshot",
+        text: "Choose Save Image / Save to Photos if your phone shows that option.",
+        files: [file],
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
     const link = document.createElement("a");
     link.href = url;
     link.download = file.name;
@@ -566,37 +520,10 @@ export default function RunLoggerModal({
     URL.revokeObjectURL(url);
   }
 
-  function renderCoachTip() {
-    if (!showCoachTip) return null;
-
-    return (
-      <div className="coach-tip-backdrop" onClick={() => setShowCoachTip(false)}>
-        <div className="coach-tip-card" onClick={event => event.stopPropagation()}>
-          <button
-            type="button"
-            className="coach-tip-close"
-            onClick={() => setShowCoachTip(false)}
-            aria-label="Close coach tip"
-          >
-            ×
-          </button>
-
-          <span className="coach-tip-icon">{coachTip.icon}</span>
-          <small>Coach Tip</small>
-          <h2>{coachTip.title}</h2>
-          <p>{coachTip.text}</p>
-          <p className="coach-tip-water">💧 {coachTip.water}</p>
-        </div>
-      </div>
-    );
-  }
-
   if (finishedRun) {
     return (
-      <div className="run-modal-backdrop" onClick={onClose}>
-        {showRunConfetti ? <div className="confetti-pop">🎉</div> : null}
-
-        <div className="run-modal saved-run-modal" onClick={event => event.stopPropagation()}>
+      <div className="run-modal-backdrop">
+        <div className="run-modal saved-run-modal">
           <button className="modal-close-button" onClick={onClose}>×</button>
 
           <div className="saved-run-header">
@@ -675,19 +602,23 @@ export default function RunLoggerModal({
             </div>
           </div>
 
-          <button className="button primary saved-run-share-button" onClick={shareOrSaveScreenshot}>
-            📥 Share / Save Screenshot
-          </button>
+          <div className="saved-run-share-grid">
+            <button className="button primary saved-run-share-button" onClick={shareScreenshot}>
+              📲 Share
+            </button>
+
+            <button className="button secondary saved-run-share-button" onClick={saveScreenshot}>
+              💾 Save Screenshot
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="run-modal-backdrop" onClick={requestClose}>
-      {showRunConfetti ? <div className="confetti-pop">🎉</div> : null}
-
-      <div className="run-modal run-logger-modal" onClick={event => event.stopPropagation()}>
+    <div className="run-modal-backdrop">
+      <div className="run-modal run-logger-modal">
         <button className="modal-close-button" onClick={requestClose}>×</button>
 
         <div className="run-logger-header">
@@ -702,29 +633,16 @@ export default function RunLoggerModal({
           🚨 Safety first: run with an adult, choose a safe route, and avoid roads where possible.
         </div>
 
-        {!manualOnly ? (
-          <div className="run-mode-toggle">
-            <button
-              type="button"
-              className={mode === "gps" ? "active" : ""}
-              onClick={() => setMode("gps")}
-              disabled={tracking}
-            >
-              GPS
-            </button>
+        <div className="run-mode-toggle">
+          <button className={mode === "gps" ? "active" : ""} onClick={() => setMode("gps")} disabled={tracking}>
+            GPS
+          </button>
+          <button className={mode === "manual" ? "active" : ""} onClick={() => setMode("manual")} disabled={tracking}>
+            Manual
+          </button>
+        </div>
 
-            <button
-              type="button"
-              className={mode === "manual" ? "active" : ""}
-              onClick={() => setMode("manual")}
-              disabled={tracking}
-            >
-              Manual
-            </button>
-          </div>
-        ) : null}
-
-        {mode === "gps" && !manualOnly ? (
+        {mode === "gps" ? (
           <>
             <div className="run-stat-grid">
               <div>
@@ -761,15 +679,14 @@ export default function RunLoggerModal({
             <p className="run-status">{gpsStatus}</p>
 
             {!tracking ? (
-              <button className="button primary" onClick={startGps} disabled={saving}>
-                ▶ START GPS RUN
+              <button className="button primary" onClick={beginStartCountdown} disabled={Boolean(countdownStep || showStartCoachNote)}>
+                {showStartCoachNote || countdownStep ? "Starting…" : "▶ START GPS RUN"}
               </button>
             ) : (
               <div className="run-action-grid">
-                <button className="button secondary" onClick={togglePause} disabled={saving}>
+                <button className="button secondary" onClick={togglePause}>
                   {paused ? "Resume" : "Pause"}
                 </button>
-
                 <button
                   className="button primary hold-finish-button"
                   disabled={saving}
@@ -809,44 +726,67 @@ export default function RunLoggerModal({
             />
 
             <button className="button primary" disabled={saving} onClick={saveManual}>
-              {saving ? "Saving…" : "Save Run"}
+              {saving ? "Saving…" : "Save Manual Run"}
             </button>
           </div>
         )}
 
-        {showFinishChoice ? (
+        {showStartCoachNote ? (
+          <div className="run-coach-note-backdrop">
+            <div className="run-coach-note-modal">
+              <h2>Coach Note</h2>
+              <p>
+                Start steady, listen to your body, and do what you can. If it feels too much,
+                slow down or split the distance over two runs.
+              </p>
+              <p className="run-coach-note-water">💧 Have you had enough water today?</p>
+
+              <button className="button primary" onClick={dismissCoachNoteAndStart}>
+                I'm Ready
+              </button>
+
+              <small>Starting automatically in a few seconds…</small>
+            </div>
+          </div>
+        ) : null}
+
+        {countdownStep ? (
+          <div className="run-countdown-backdrop">
+            <div className={`run-countdown-light ${countdownStep.toLowerCase().replace("!", "")}`}>
+              <span>{countdownStep}</span>
+            </div>
+          </div>
+        ) : null}
+
+        {showConfirmFinish ? (
           <div className="run-confirm-backdrop">
             <div className="run-confirm-modal">
               <h2>Finish this run?</h2>
-              <p>
-                You have recorded {distanceKm.toFixed(2)} km for {selectedPlayer.name}.
-                {targetKm && distanceKm < targetKm
-                  ? ` The target is ${targetKm.toFixed(2)} km, so this GPS run cannot be saved yet.`
-                  : " Target reached."}
-                Keep going to add more distance, or discard this run if you want to stop without saving.
-              </p>
+              <p>Save {distanceKm.toFixed(2)} km for {selectedPlayer.name}?</p>
 
               <div className="run-action-grid">
-                <button
-                  className="button secondary"
-                  onClick={() => {
-                    setShowFinishChoice(false);
-                    setHoldPercent(0);
-                  }}
-                >
-                  Keep Going
+                <button className="button primary" onClick={finishGps}>
+                  Save Run
                 </button>
 
                 <button
-                  className="button primary"
-                  onClick={() => {
-                    setShowFinishChoice(false);
-                    setShowDiscardConfirm(true);
-                  }}
+                  className="button secondary"
+                  onClick={() => setShowDiscardConfirm(true)}
                 >
                   Discard
                 </button>
               </div>
+
+              <button
+                className="link-button"
+                onClick={() => {
+                  setShowConfirmFinish(false);
+                  setShowDiscardConfirm(false);
+                  setHoldPercent(0);
+                }}
+              >
+                Keep going
+              </button>
             </div>
           </div>
         ) : null}
@@ -854,32 +794,24 @@ export default function RunLoggerModal({
         {showDiscardConfirm ? (
           <div className="run-confirm-backdrop">
             <div className="run-confirm-modal">
-              <h2>Are you sure?</h2>
-              <p>This will discard the GPS run and nothing will be saved.</p>
+              <h2>Discard this run?</h2>
+              <p>This will delete the GPS route from this screen and it will not be saved.</p>
 
               <div className="run-action-grid">
                 <button
                   className="button secondary"
                   onClick={() => setShowDiscardConfirm(false)}
                 >
-                  Keep Running
+                  No, Go Back
                 </button>
 
-                <button
-                  className="button secondary danger-button"
-                  onClick={() => {
-                    resetGpsState();
-                    onClose?.();
-                  }}
-                >
+                <button className="button primary" onClick={discardGpsRun}>
                   Yes, Discard
                 </button>
               </div>
             </div>
           </div>
         ) : null}
-
-        {renderCoachTip()}
       </div>
     </div>
   );
