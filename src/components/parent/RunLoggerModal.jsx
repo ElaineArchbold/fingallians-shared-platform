@@ -191,6 +191,7 @@ export default function RunLoggerModal({
   const [countdownStep, setCountdownStep] = useState("");
   const [showStartCoachNote, setShowStartCoachNote] = useState(false);
   const [coachNote, setCoachNote] = useState(() => getRandomCoachNote());
+  const [showSuccessConfetti, setShowSuccessConfetti] = useState(false);
 
   const [manualDistance, setManualDistance] = useState(
     activity?.target_unit === "km" ? String(activity.target_value || "") : ""
@@ -206,6 +207,7 @@ export default function RunLoggerModal({
   const cardRef = useRef(null);
   const countdownTimeoutRef = useRef(null);
   const coachNoteTimeoutRef = useRef(null);
+  const successConfettiTimeoutRef = useRef(null);
   const savingRef = useRef(false);
   const audioContextRef = useRef(null);
 
@@ -288,6 +290,11 @@ export default function RunLoggerModal({
       clearTimeout(coachNoteTimeoutRef.current);
       coachNoteTimeoutRef.current = null;
     }
+
+    if (successConfettiTimeoutRef.current) {
+      clearTimeout(successConfettiTimeoutRef.current);
+      successConfettiTimeoutRef.current = null;
+    }
   }
 
   function requestClose() {
@@ -306,6 +313,51 @@ export default function RunLoggerModal({
     }
 
     setShowStartCoachNote(false);
+  }
+
+  function playRunCompleteDing() {
+    try {
+      const context = getAudioContext();
+      if (!context) return;
+
+      const now = context.currentTime;
+      const notes = [523, 659, 784, 1046];
+
+      notes.forEach((frequency, index) => {
+        const start = now + index * 0.08;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+
+        oscillator.type = "triangle";
+        oscillator.frequency.setValueAtTime(frequency, start);
+
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+
+        oscillator.start(start);
+        oscillator.stop(start + 0.34);
+      });
+    } catch {
+      // Sound is a bonus only.
+    }
+  }
+
+  function showRunCompleteCelebration() {
+    playRunCompleteDing();
+    setShowSuccessConfetti(true);
+
+    if (successConfettiTimeoutRef.current) {
+      clearTimeout(successConfettiTimeoutRef.current);
+    }
+
+    successConfettiTimeoutRef.current = setTimeout(() => {
+      setShowSuccessConfetti(false);
+      successConfettiTimeoutRef.current = null;
+    }, 1400);
   }
 
   function getAudioContext() {
@@ -600,6 +652,7 @@ export default function RunLoggerModal({
         ...saved,
         id: savedResult?.id || savedResult?.runProofId || savedResult?.proof?.id || null,
       });
+      showRunCompleteCelebration();
     } catch (error) {
       alert(error?.message || "Could not save this run.");
     } finally {
@@ -661,6 +714,7 @@ export default function RunLoggerModal({
         ...saved,
         id: savedResult?.id || savedResult?.runProofId || savedResult?.proof?.id || null,
       });
+      showRunCompleteCelebration();
     } catch (error) {
       alert(error?.message || "Could not save this manual run.");
     } finally {
@@ -886,6 +940,12 @@ export default function RunLoggerModal({
             </button>
           ) : null}
         </div>
+
+        {showSuccessConfetti ? (
+          <div className="confetti-pop" aria-hidden="true">
+            🎉
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -953,8 +1013,16 @@ export default function RunLoggerModal({
             <p className="run-status">{gpsStatus}</p>
 
             {!tracking ? (
-              <button className="button primary" onClick={beginStartCountdown} disabled={Boolean(countdownStep)}>
-                {countdownStep ? "Starting…" : "▶ START GPS RUN"}
+              <button
+                className="button primary"
+                onClick={beginStartCountdown}
+                disabled={Boolean(countdownStep || showStartCoachNote)}
+              >
+                {showStartCoachNote
+                  ? "Coach note first…"
+                  : countdownStep
+                    ? "Starting…"
+                    : "▶ START GPS RUN"}
               </button>
             ) : (
               <div className="run-action-grid">
