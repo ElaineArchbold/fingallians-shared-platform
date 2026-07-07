@@ -1381,12 +1381,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
               }
               onClick={() => {
                 setMigrationFilter(card.key);
-                window.setTimeout(() => {
-                  migrationListRef.current?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-                }, 50);
+                setDetailModal({ type: "migrationList", filter: card.key });
               }}
             >
               <span>{card.icon}</span>

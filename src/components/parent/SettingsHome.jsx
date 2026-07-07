@@ -169,13 +169,13 @@ export default function SettingsHome({
                   key={player.id}
                   className={
                     player.id === selectedPlayer.id
-                      ? "settings-child-line active"
-                      : "settings-child-line"
+                      ? "settings-child-box active"
+                      : "settings-child-box"
                   }
                 >
                   <button
                     type="button"
-                    className="settings-child-box"
+                    className="settings-child-main"
                     onClick={() => onSelectChild?.(player)}
                   >
                     <span>{initials(player.name)}</span>

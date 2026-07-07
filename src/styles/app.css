@@ -11714,3 +11714,131 @@ button.migration-feed-row:hover,
 .settings-remove-child:focus-visible {
   color: var(--club-red-dark) !important;
 }
+
+/* =====================================================
+   FINAL FIXES: Settings remove link inside child box + admin migration tabs/log
+===================================================== */
+
+.settings-child-list {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.settings-child-box {
+  width: 100% !important;
+  border: 1px solid #f0e1df !important;
+  background: #fff8f8 !important;
+  border-radius: 16px !important;
+  padding: 12px !important;
+  display: grid !important;
+  grid-template-columns: 1fr auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+  text-align: left !important;
+}
+
+.settings-child-box.active {
+  border-color: var(--club-red) !important;
+  background: rgba(197, 20, 23, .08) !important;
+}
+
+.settings-child-main {
+  min-width: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: grid !important;
+  grid-template-columns: auto 1fr !important;
+  gap: 10px !important;
+  align-items: center !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  color: inherit !important;
+}
+
+.settings-child-main span {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 999px !important;
+  background: var(--club-red) !important;
+  color: white !important;
+  display: grid !important;
+  place-items: center !important;
+  font-weight: 900 !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.settings-child-main strong {
+  display: block !important;
+  color: var(--text) !important;
+}
+
+.settings-child-main small {
+  display: block !important;
+  color: var(--text-secondary) !important;
+}
+
+.settings-remove-child {
+  all: unset !important;
+  justify-self: end !important;
+  align-self: center !important;
+  color: var(--club-red) !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+
+.settings-remove-child:hover,
+.settings-remove-child:focus-visible {
+  color: var(--club-red-dark) !important;
+}
+
+@media (max-width: 520px) {
+  .settings-child-box {
+    grid-template-columns: 1fr auto !important;
+  }
+
+  .settings-remove-child {
+    font-size: 11px !important;
+  }
+}
+
+.admin-tabs {
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)) !important;
+}
+
+.admin-tabs button {
+  min-width: 0 !important;
+}
+
+.admin-tabs small {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 100% !important;
+}
+
+.migration-filter-card,
+.migration-feed-row {
+  cursor: pointer !important;
+}
+
+.migration-filter-card:hover,
+.migration-feed-row:hover {
+  transform: translateY(-2px) !important;
+  border-color: var(--club-red) !important;
+}
+
+.migration-card-action {
+  color: var(--club-red) !important;
+  font-style: normal !important;
+  font-weight: 900 !important;
+  font-size: 12px !important;
+}
