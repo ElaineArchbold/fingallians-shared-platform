@@ -10764,3 +10764,331 @@ body.is-child-link-mode .week-nav-card button {
   color: var(--text-muted);
   font-weight: 800;
 }
+
+/* =====================================================
+   FINAL GPS logger polish: orange coach note, game start sounds, manual save/remove
+   Appended last so these rules override older versions.
+===================================================== */
+
+.saved-run-share-grid {
+  width: calc(100% - 40px);
+  margin: 0 20px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.saved-run-share-grid .saved-run-share-button {
+  width: 100%;
+  margin: 0;
+}
+
+.saved-run-share-grid button:disabled,
+.saved-run-delete-button:disabled {
+  opacity: .7;
+  cursor: wait;
+}
+
+.saved-run-delete-button {
+  width: calc(100% - 40px);
+  margin: 0 20px 18px;
+}
+
+/* Coach note restored to bright orange style */
+.run-coach-note-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(15, 23, 42, .62);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.run-coach-note-modal {
+  width: min(430px, 92vw);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, .28), transparent 34%),
+    linear-gradient(135deg, #ff9f1c, #ff7a1a 44%, #f05a28);
+  color: white;
+  border-radius: 30px;
+  border: 3px solid rgba(255, 224, 138, .9);
+  box-shadow: 0 28px 80px rgba(140, 54, 0, .42);
+  padding: 26px 24px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.run-coach-note-modal h2 {
+  margin: 0 0 10px;
+  color: white;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 34px;
+  letter-spacing: .02em;
+  text-shadow: 0 3px 12px rgba(120, 44, 0, .28);
+}
+
+.run-coach-note-modal p {
+  margin: 0 0 14px;
+  color: white;
+  font-weight: 900;
+  line-height: 1.35;
+  text-shadow: 0 2px 8px rgba(120, 44, 0, .18);
+}
+
+.run-coach-note-water {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .28);
+  font-size: 18px;
+  color: white !important;
+}
+
+.run-coach-note-modal .button.primary {
+  margin-top: 4px;
+  background: white;
+  color: #c2410c;
+  box-shadow: 0 12px 24px rgba(120, 44, 0, .24);
+}
+
+.run-coach-note-modal small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, .9);
+  font-weight: 900;
+}
+
+/* READY / SET / GO game countdown */
+.run-countdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  background: rgba(15, 23, 42, .76);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.run-countdown-light {
+  width: min(270px, 76vw);
+  height: min(270px, 76vw);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 11px solid rgba(255, 255, 255, .9);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, .34),
+    inset 0 0 28px rgba(255, 255, 255, .35);
+  animation: runCountdownPop .55s cubic-bezier(.2, 1.25, .35, 1);
+}
+
+.run-countdown-light span {
+  color: white;
+  font-family: var(--font-heading);
+  font-size: clamp(44px, 13vw, 78px);
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 5px 18px rgba(0, 0, 0, .35);
+}
+
+.run-countdown-light.ready {
+  background: radial-gradient(circle at 34% 26%, #ffaaaa, #ef4444 48%, #991b1b);
+}
+
+.run-countdown-light.set {
+  background: radial-gradient(circle at 34% 26%, #ffe18a, #f59e0b 48%, #b45309);
+}
+
+.run-countdown-light.go {
+  background: radial-gradient(circle at 34% 26%, #9effbd, #16a34a 48%, #14532d);
+}
+
+@keyframes runCountdownPop {
+  from {
+    transform: scale(.64) rotate(-4deg);
+    opacity: .45;
+  }
+
+  65% {
+    transform: scale(1.08) rotate(2deg);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .saved-run-share-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   FINAL GPS logger polish: orange coach note, game start sounds, manual save/remove
+   Appended last so these rules override older versions.
+===================================================== */
+
+.saved-run-share-grid {
+  width: calc(100% - 40px);
+  margin: 0 20px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.saved-run-share-grid .saved-run-share-button {
+  width: 100%;
+  margin: 0;
+}
+
+.saved-run-share-grid button:disabled,
+.saved-run-delete-button:disabled {
+  opacity: .7;
+  cursor: wait;
+}
+
+.saved-run-delete-button {
+  width: calc(100% - 40px);
+  margin: 0 20px 18px;
+}
+
+/* Coach note restored to bright orange style */
+.run-coach-note-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(15, 23, 42, .62);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.run-coach-note-modal {
+  width: min(430px, 92vw);
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, .28), transparent 34%),
+    linear-gradient(135deg, #ff9f1c, #ff7a1a 44%, #f05a28);
+  color: white;
+  border-radius: 30px;
+  border: 3px solid rgba(255, 224, 138, .9);
+  box-shadow: 0 28px 80px rgba(140, 54, 0, .42);
+  padding: 26px 24px;
+  text-align: center;
+  overflow: hidden;
+}
+
+.run-coach-note-modal h2 {
+  margin: 0 0 10px;
+  color: white;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 34px;
+  letter-spacing: .02em;
+  text-shadow: 0 3px 12px rgba(120, 44, 0, .28);
+}
+
+.run-coach-note-modal p {
+  margin: 0 0 14px;
+  color: white;
+  font-weight: 900;
+  line-height: 1.35;
+  text-shadow: 0 2px 8px rgba(120, 44, 0, .18);
+}
+
+.run-coach-note-water {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .28);
+  font-size: 18px;
+  color: white !important;
+}
+
+.run-coach-note-modal .button.primary {
+  margin-top: 4px;
+  background: white;
+  color: #c2410c;
+  box-shadow: 0 12px 24px rgba(120, 44, 0, .24);
+}
+
+.run-coach-note-modal small {
+  display: block;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, .9);
+  font-weight: 900;
+}
+
+/* READY / SET / GO game countdown */
+.run-countdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  background: rgba(15, 23, 42, .76);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.run-countdown-light {
+  width: min(270px, 76vw);
+  height: min(270px, 76vw);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 11px solid rgba(255, 255, 255, .9);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, .34),
+    inset 0 0 28px rgba(255, 255, 255, .35);
+  animation: runCountdownPop .55s cubic-bezier(.2, 1.25, .35, 1);
+}
+
+.run-countdown-light span {
+  color: white;
+  font-family: var(--font-heading);
+  font-size: clamp(44px, 13vw, 78px);
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 5px 18px rgba(0, 0, 0, .35);
+}
+
+.run-countdown-light.ready {
+  background: radial-gradient(circle at 34% 26%, #ffaaaa, #ef4444 48%, #991b1b);
+}
+
+.run-countdown-light.set {
+  background: radial-gradient(circle at 34% 26%, #ffe18a, #f59e0b 48%, #b45309);
+}
+
+.run-countdown-light.go {
+  background: radial-gradient(circle at 34% 26%, #9effbd, #16a34a 48%, #14532d);
+}
+
+@keyframes runCountdownPop {
+  from {
+    transform: scale(.64) rotate(-4deg);
+    opacity: .45;
+  }
+
+  65% {
+    transform: scale(1.08) rotate(2deg);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .saved-run-share-grid {
+    grid-template-columns: 1fr;
+  }
+}

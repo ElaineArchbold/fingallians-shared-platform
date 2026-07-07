@@ -71,11 +71,14 @@ export default function RunLoggerModal({
   selectedPlayer,
   onClose,
   onSaved,
+  onDeleted,
   manualOnly = false,
 }) {
-  const [mode, setMode] = useState("gps");
+  const [mode, setMode] = useState(manualOnly ? "manual" : "gps");
   const [tracking, setTracking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [screenshotBusy, setScreenshotBusy] = useState(false);
   const [finishedRun, setFinishedRun] = useState(null);
   const [paused, setPaused] = useState(false);
   const [gpsStatus, setGpsStatus] = useState("Ready to start.");
@@ -101,6 +104,7 @@ export default function RunLoggerModal({
   const cardRef = useRef(null);
   const countdownTimeoutRef = useRef(null);
   const coachNoteTimeoutRef = useRef(null);
+  const savingRef = useRef(false);
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
@@ -108,6 +112,15 @@ export default function RunLoggerModal({
   const latestPoint = points[points.length - 1] || null;
   const route = useMemo(() => points.map(point => [point.lat, point.lng]), [points]);
   const pace = paceFromSeconds(elapsed, distanceKm);
+
+  useEffect(() => {
+    setMode(manualOnly ? "manual" : "gps");
+    setFinishedRun(null);
+    setSaving(false);
+    savingRef.current = false;
+    setManualDistance(activity?.target_unit === "km" ? String(activity.target_value || "") : "");
+    setManualMinutes("");
+  }, [activity?.id, manualOnly, activity?.target_unit, activity?.target_value]);
 
   useEffect(() => {
     function blockRefresh(event) {
@@ -162,23 +175,38 @@ export default function RunLoggerModal({
       if (!AudioContext) return;
 
       const context = new AudioContext();
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
+      const now = context.currentTime;
 
-      oscillator.type = step === "GO!" ? "square" : "sine";
-      oscillator.frequency.value =
-        step === "READY" ? 360 : step === "SET" ? 520 : 780;
+      const notes =
+        step === "READY"
+          ? [392, 523]
+          : step === "SET"
+            ? [523, 659]
+            : [659, 784, 1046];
 
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.24, context.currentTime + 0.025);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.34);
+      notes.forEach((frequency, index) => {
+        const start = now + index * 0.085;
+        const duration = step === "GO!" ? 0.34 : 0.22;
 
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.36);
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
 
-      oscillator.onended = () => context.close?.();
+        oscillator.type = step === "GO!" ? "square" : "sawtooth";
+        oscillator.frequency.setValueAtTime(frequency, start);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.06, start + duration);
+
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.018);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+
+        oscillator.start(start);
+        oscillator.stop(start + duration + 0.02);
+      });
+
+      setTimeout(() => context.close?.(), 800);
     } catch {
       // Sound is a bonus only. Some phones block audio until after interaction.
     }
@@ -369,6 +397,8 @@ export default function RunLoggerModal({
   }
 
   async function finishGps() {
+    if (savingRef.current) return;
+
     if (!selectedPlayer?.id) {
       alert("Select a player first.");
       return;
@@ -382,6 +412,7 @@ export default function RunLoggerModal({
     stopTracking();
     setTracking(false);
     setShowConfirmFinish(false);
+    savingRef.current = true;
     setSaving(true);
 
     const saved = {
@@ -400,11 +431,15 @@ export default function RunLoggerModal({
     };
 
     try {
-      await onSaved(saved);
-      setFinishedRun(saved);
+      const savedResult = await onSaved(saved);
+      setFinishedRun({
+        ...saved,
+        id: savedResult?.id || savedResult?.runProofId || savedResult?.proof?.id || null,
+      });
     } catch (error) {
       alert(error?.message || "Could not save this run.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
@@ -424,6 +459,8 @@ export default function RunLoggerModal({
   }
 
   async function saveManual() {
+    if (savingRef.current) return;
+
     if (!selectedPlayer?.id) {
       alert("Select a player first.");
       return;
@@ -437,6 +474,7 @@ export default function RunLoggerModal({
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
 
     const saved = {
@@ -454,12 +492,40 @@ export default function RunLoggerModal({
     };
 
     try {
-      await onSaved(saved);
-      setFinishedRun(saved);
+      const savedResult = await onSaved(saved);
+      setFinishedRun({
+        ...saved,
+        id: savedResult?.id || savedResult?.runProofId || savedResult?.proof?.id || null,
+      });
     } catch (error) {
       alert(error?.message || "Could not save this manual run.");
     } finally {
+      savingRef.current = false;
       setSaving(false);
+    }
+  }
+
+  async function removeFinishedManualRun() {
+    if (!finishedRun || finishedRun.type !== "manual") return;
+
+    const ok = window.confirm("Remove this manual run entry?");
+    if (!ok) return;
+
+    setDeleting(true);
+
+    try {
+      if (typeof onDeleted === "function") {
+        await onDeleted(finishedRun);
+      } else {
+        throw new Error("Remove manual run is not wired up yet.");
+      }
+
+      setFinishedRun(null);
+      onClose?.();
+    } catch (error) {
+      alert(error?.message || "Could not remove this manual run.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -480,44 +546,64 @@ export default function RunLoggerModal({
   }
 
   async function shareScreenshot() {
+    if (screenshotBusy) return;
+    setScreenshotBusy(true);
+
     const file = await makeScreenshotFile();
-    if (!file) return;
+    if (!file) {
+      setScreenshotBusy(false);
+      return;
+    }
 
     const shareText =
       `${selectedPlayer.name} completed ${activity.title} in the Fingallians Fitness Challenge.`;
 
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({
-        title: "Fingallians Fitness Challenge",
-        text: shareText,
-        files: [file],
-      });
-      return;
-    }
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: "Fingallians Fitness Challenge",
+          text: shareText,
+          files: [file],
+        });
+        return;
+      }
 
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setScreenshotBusy(false);
+    }
   }
 
   async function saveScreenshot() {
-    const file = await makeScreenshotFile();
-    if (!file) return;
+    if (screenshotBusy) return;
+    setScreenshotBusy(true);
 
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({
-        title: "Save Run Screenshot",
-        text: "Choose Save Image / Save to Photos if your phone shows that option.",
-        files: [file],
-      });
+    const file = await makeScreenshotFile();
+    if (!file) {
+      setScreenshotBusy(false);
       return;
     }
 
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: "Save Run Screenshot",
+          text: "Choose Save Image / Save to Photos if your phone shows that option.",
+          files: [file],
+        });
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.name;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setScreenshotBusy(false);
+    }
   }
 
   if (finishedRun) {
@@ -603,14 +689,32 @@ export default function RunLoggerModal({
           </div>
 
           <div className="saved-run-share-grid">
-            <button className="button primary saved-run-share-button" onClick={shareScreenshot}>
-              📲 Share
+            <button
+              className="button primary saved-run-share-button"
+              onClick={shareScreenshot}
+              disabled={screenshotBusy}
+            >
+              {screenshotBusy ? "Preparing…" : "📲 Share"}
             </button>
 
-            <button className="button secondary saved-run-share-button" onClick={saveScreenshot}>
-              💾 Save Screenshot
+            <button
+              className="button secondary saved-run-share-button"
+              onClick={saveScreenshot}
+              disabled={screenshotBusy}
+            >
+              {screenshotBusy ? "Preparing…" : "💾 Save Screenshot"}
             </button>
           </div>
+
+          {finishedRun.type === "manual" ? (
+            <button
+              className="button secondary saved-run-delete-button"
+              onClick={removeFinishedManualRun}
+              disabled={deleting}
+            >
+              {deleting ? "Removing…" : "Remove Manual Run"}
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -726,7 +830,7 @@ export default function RunLoggerModal({
             />
 
             <button className="button primary" disabled={saving} onClick={saveManual}>
-              {saving ? "Saving…" : "Save Manual Run"}
+              {saving ? "Saving run…" : "Save Manual Run"}
             </button>
           </div>
         )}
