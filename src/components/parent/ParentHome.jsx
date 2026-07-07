@@ -539,10 +539,15 @@ export default function ParentHome({
       return;
     }
 
-    const { error } = await supabase.from("parent_players").insert({
-      user_id: userData.user.id,
-      player_id: player.id,
-    });
+    const { error } = await supabase.from("parent_players").upsert(
+      {
+        user_id: userData.user.id,
+        player_id: player.id,
+      },
+      {
+        onConflict: "user_id,player_id",
+      }
+    );
 
     setLinking(false);
 
@@ -674,8 +679,9 @@ export default function ParentHome({
       (weeks || []).find(activity => activity.id === result.activityId) || {
         id: result.activityId,
         title: result.title,
-        activity_key: "fitness",
+        activity_key: "run",
         target_unit: "km",
+        target_value: result.targetKm || result.distanceKm || 0,
       };
 
     const completion = await upsertCompletion({
@@ -921,7 +927,7 @@ export default function ParentHome({
         </div>
       ) : null}
 
-      <ChallengeHome
+<ChallengeHome
         supabase={supabase}
         squadConfig={squadConfig}
         selectedPlayer={selectedPlayer}

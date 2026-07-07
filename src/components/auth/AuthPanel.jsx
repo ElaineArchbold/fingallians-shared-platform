@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 const REMEMBER_EMAIL_KEY = "fingalliansRememberedEmail";
+const KEEP_LOGGED_IN_KEY = "fingalliansKeepLoggedIn";
 
 const SQUADS = [
   { key: "2014-boys", label: "2014 Boys" },
@@ -55,8 +56,10 @@ export default function AuthPanel({
   function saveRememberedEmail(value) {
     if (rememberMe) {
       localStorage.setItem(REMEMBER_EMAIL_KEY, value);
+      localStorage.setItem(KEEP_LOGGED_IN_KEY, "true");
     } else {
       localStorage.removeItem(REMEMBER_EMAIL_KEY);
+      localStorage.removeItem(KEEP_LOGGED_IN_KEY);
     }
   }
 
@@ -154,24 +157,23 @@ export default function AuthPanel({
     <main className="split-auth-screen">
       <section className="split-auth-card">
         <div className="split-auth-brand">
-  <div className="split-auth-crest">
-    <img src="/fingallians-crest.png" alt="Fingallians crest" />
-  </div>
+          <div className="split-auth-crest">
+            <img src="/fingallians-crest.png" alt="Fingallians crest" />
+          </div>
 
-  <h1>Summer Fitness Challenge</h1>
+          <p className="split-auth-kicker">Fingallians</p>
+          <h1>Fitness Challenge</h1>
+          <p>
+            Select your squad, then log in to manage your child's weekly challenge.
+          </p>
 
-  
-  <p>
-    Select your squad, then log in to manage your child's weekly challenge.
-  </p>
-
-  {chosenSquad ? (
-    <div className="split-auth-selected">
-      <span>Selected Squad</span>
-      <strong>{chosenSquad.label}</strong>
-    </div>
-  ) : null}
-</div>
+          {chosenSquad ? (
+            <div className="split-auth-selected">
+              <span>Selected Squad</span>
+              <strong>{chosenSquad.label}</strong>
+            </div>
+          ) : null}
+        </div>
 
         <div className="split-auth-panel">
           <div className="split-auth-panel-header">
@@ -258,7 +260,7 @@ export default function AuthPanel({
                       checked={rememberMe}
                       onChange={event => setRememberMe(event.target.checked)}
                     />
-                    <span>Remember me on this device</span>
+                    <span>Keep me logged in on this device</span>
                   </label>
                 </>
               ) : null}

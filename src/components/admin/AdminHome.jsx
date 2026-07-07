@@ -1457,6 +1457,73 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
+  async function adminDeleteRun(run) {
+    if (!run?.id) return false;
+
+    const ok = window.confirm(`Remove ${run.label || "this run"} for ${run.player_name || "this player"}?`);
+    if (!ok) return false;
+
+    const { error: runError } = await supabase
+      .from("run_proofs")
+      .delete()
+      .eq("id", run.id);
+
+    if (runError) {
+      alert(runError.message);
+      return false;
+    }
+
+    if (run.player_id && run.task_key) {
+      await supabase
+        .from("activity_completions")
+        .delete()
+        .eq("player_id", run.player_id)
+        .eq("activity_id", run.task_key)
+        .in("completion_type", ["manual", "gps"]);
+
+      await supabase
+        .from("xp_transactions")
+        .delete()
+        .eq("player_id", run.player_id)
+        .eq("activity_id", run.task_key);
+    }
+
+    await loadAdminData();
+    setCoachRefreshKey(current => current + 1);
+    showToast("Run removed.");
+    return true;
+  }
+
+  async function adminUnapproveCompletion(completion) {
+    if (!completion?.id) return false;
+
+    const ok = window.confirm("Move this approval back to Awaiting Approval and remove its XP?");
+    if (!ok) return false;
+
+    const { error: updateError } = await supabase
+      .from("activity_completions")
+      .update({
+        status: "awaiting_approval",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", completion.id);
+
+    if (updateError) {
+      alert(updateError.message);
+      return false;
+    }
+
+    await supabase
+      .from("xp_transactions")
+      .delete()
+      .eq("player_id", completion.player_id)
+      .eq("activity_id", completion.activity_id);
+
+    await loadAdminData();
+    showToast("Moved back to awaiting approval.");
+    return true;
+  }
+
   async function adminHandleRunSaved(result, player) {
     if (!player?.id) return false;
 

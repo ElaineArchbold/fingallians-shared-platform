@@ -80,11 +80,23 @@ function isBonusActivity(activity) {
 }
 
 function isRunActivity(activity) {
+  const title = String(activity?.title || "").toLowerCase();
+  const targetUnit = String(activity?.target_unit || "").toLowerCase();
+
+  return activity?.gps_preferred === true || targetUnit === "km" || title.includes("run");
+}
+
+function isFitnessRepActivity(activity) {
+  const targetUnit = String(activity?.target_unit || "").toLowerCase();
+
   return (
-    activity.gps_preferred ||
-    activity.title?.toLowerCase().includes("run") ||
-    activity.target_unit === "km"
+    activity?.activity_key === "fitness" &&
+    ["reps", "rep", "solos", "solo"].includes(targetUnit)
   );
+}
+
+function is2017Squad(squadKey = "") {
+  return String(squadKey).includes("2017");
 }
 
 function youtubeEmbedUrl(id) {
@@ -218,21 +230,33 @@ export default function ProgressHome({
     completion => completion.status === "completed"
   );
 
-  const uniqueRunProofs = Array.from(
-    new Map(
-      savedRuns.map(run => [
-        run.activity_id || run.task_key || `${run.week || ""}-${run.run_index || ""}-${run.label || ""}-${run.saved_at || ""}`,
-        run,
-      ])
-    ).values()
-  );
+  const completedRunActivities = approvedCompletions
+    .map(completion => activities.find(activity => activity.id === completion.activity_id))
+    .filter(Boolean)
+    .filter(isRunActivity);
 
-  const distanceRanKm = uniqueRunProofs.reduce(
-    (total, run) => total + Number(run.distance_km || 0),
+  const distanceRanKm = completedRunActivities.reduce(
+    (total, activity) => total + Number(activity.target_value || 0),
     0
   );
 
   const distanceTargetKm = sumRunTargets(activities);
+
+  const completedFitnessRepActivities = approvedCompletions
+    .map(completion => activities.find(activity => activity.id === completion.activity_id))
+    .filter(Boolean)
+    .filter(isFitnessRepActivity);
+
+  const fitnessRepsDone = completedFitnessRepActivities.reduce(
+    (total, activity) => total + Number(activity.target_value || 0),
+    0
+  );
+
+  const fitnessRepsTarget = activities
+    .filter(isFitnessRepActivity)
+    .reduce((total, activity) => total + Number(activity.target_value || 0), 0);
+
+  const showFitnessInsteadOfDistance = is2017Squad(selectedPlayer?.squad_key || squadConfig?.key);
 
   const speedMinutes = minutesForSkill(
     activities,
@@ -380,15 +404,21 @@ export default function ProgressHome({
               <div className="journey-total-list">
                 <div className="journey-total-row">
                   <div className="journey-total-head">
-                    <span>🏃</span>
-                    <strong>Distance ran</strong>
-                    <em>{distanceRanKm.toFixed(2)} km</em>
+                    <span>{showFitnessInsteadOfDistance ? "🔥" : "🏃"}</span>
+                    <strong>{showFitnessInsteadOfDistance ? "Fitness reps" : "Distance ran"}</strong>
+                    <em>
+                      {showFitnessInsteadOfDistance
+                        ? `${fitnessRepsDone} reps`
+                        : `${distanceRanKm.toFixed(2)} km`}
+                    </em>
                   </div>
 
                   <div className="journey-total-track">
                     <div
                       style={{
-                        width: `${progressPercent(distanceRanKm, distanceTargetKm)}%`,
+                        width: showFitnessInsteadOfDistance
+                          ? `${progressPercent(fitnessRepsDone, fitnessRepsTarget)}%`
+                          : `${progressPercent(distanceRanKm, distanceTargetKm)}%`,
                       }}
                     />
                   </div>

@@ -10246,3 +10246,230 @@ button[aria-label="Settings"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Child/parent leaderboard position card */
+.home-leaderboard-position-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .22), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fff8e8);
+  border: 1px solid rgba(247, 201, 72, .38);
+  box-shadow: 0 12px 30px rgba(72, 30, 18, .08);
+}
+
+.home-leaderboard-position-card > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #fff2d1;
+  font-size: 28px;
+}
+
+.home-leaderboard-position-card strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: .95;
+  text-transform: uppercase;
+}
+
+.home-leaderboard-position-card p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-weight: 900;
+}
+
+.home-leaderboard-position-card b {
+  color: var(--club-red);
+}
+
+/* =====================================================
+   Final cleanup: progress totals, child links and mobile auth
+===================================================== */
+
+.journey-total-row.is-fitness-total .journey-total-head span,
+.journey-total-row .journey-total-head span {
+  flex: 0 0 auto;
+}
+
+.child-link-shell,
+.child-link-shell .page,
+.child-link-shell .challenge-page {
+  min-height: 100vh;
+}
+
+body.is-child-link-mode .bottom-nav,
+body:has(.child-link-shell) .bottom-nav {
+  display: none !important;
+}
+
+body.is-child-link-mode .app-shell,
+.child-link-shell {
+  padding-bottom: 18px !important;
+}
+
+.split-remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 900;
+  margin: 2px 0 6px;
+}
+
+.split-remember-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--club-red);
+}
+
+.home-leaderboard-position-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .22), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fff8e8);
+  border: 1px solid rgba(247, 201, 72, .38);
+  box-shadow: 0 12px 30px rgba(72, 30, 18, .08);
+}
+
+.home-leaderboard-position-card > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #fff2d1;
+  font-size: 28px;
+}
+
+.home-leaderboard-position-card strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: .95;
+  text-transform: uppercase;
+}
+
+.home-leaderboard-position-card p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-weight: 900;
+}
+
+@media (max-width: 620px) {
+  .journey-total-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  .split-remember-row {
+    align-items: flex-start;
+  }
+}
+
+/* =====================================================
+   Final cleanup: progress totals, child links and mobile auth
+===================================================== */
+
+.journey-total-row.is-fitness-total .journey-total-head span,
+.journey-total-row .journey-total-head span {
+  flex: 0 0 auto;
+}
+
+.child-link-shell,
+.child-link-shell .page,
+.child-link-shell .challenge-page {
+  min-height: 100vh;
+}
+
+body.is-child-link-mode .bottom-nav,
+body:has(.child-link-shell) .bottom-nav {
+  display: none !important;
+}
+
+body.is-child-link-mode .app-shell,
+.child-link-shell {
+  padding-bottom: 18px !important;
+}
+
+.split-remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 900;
+  margin: 2px 0 6px;
+}
+
+.split-remember-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--club-red);
+}
+
+.home-leaderboard-position-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .22), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fff8e8);
+  border: 1px solid rgba(247, 201, 72, .38);
+  box-shadow: 0 12px 30px rgba(72, 30, 18, .08);
+}
+
+.home-leaderboard-position-card > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #fff2d1;
+  font-size: 28px;
+}
+
+.home-leaderboard-position-card strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: .95;
+  text-transform: uppercase;
+}
+
+.home-leaderboard-position-card p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-weight: 900;
+}
+
+@media (max-width: 620px) {
+  .journey-total-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  .split-remember-row {
+    align-items: flex-start;
+  }
+}

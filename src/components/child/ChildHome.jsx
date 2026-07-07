@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
-import { playCompleteDing } from "../../lib/sounds";
 
 const CURRENT_WEEK = 1;
 
@@ -23,14 +22,13 @@ function groupWeeks(activities) {
 
 function xpForActivity(activity, completionType = "activity") {
   const title = String(activity?.title || "").toLowerCase();
-  const isRun =
-    activity?.gps_preferred ||
-    activity?.target_unit === "km" ||
-    title.includes("run");
+  const targetUnit = String(activity?.target_unit || "").toLowerCase();
+  const isRun = activity?.gps_preferred === true || targetUnit === "km" || title.includes("run");
 
   if (isRun || completionType === "gps" || completionType === "manual") return 3;
 
   if (
+    activity?.activity_key === "fitness" ||
     activity?.activity_key === "running-technique" ||
     activity?.activity_key === "football-skill" ||
     activity?.activity_key === "hurling-skill" ||
@@ -39,7 +37,6 @@ function xpForActivity(activity, completionType = "activity") {
     return 2;
   }
 
-  if (activity?.activity_key === "fitness") return 2;
   if (activity?.activity_key === "squad-session") return 4;
   if (activity?.activity_key === "bonus") return 4;
   if (activity?.activity_key === "recovery") return 1;
@@ -77,8 +74,12 @@ export default function ChildHome({
 
   const weekNumbers = useMemo(() => groupWeeks(weeks), [weeks]);
 
+  const savedSelectedPlayerId =
+    selectedPlayerId || localStorage.getItem("selectedPlayerId");
+
   const selectedPlayer =
-    localPlayers.find(p => p.id === selectedPlayerId) || null;
+    localPlayers.find(p => p.id === savedSelectedPlayerId) ||
+    (localPlayers.length === 1 ? localPlayers[0] : null);
 
   useEffect(() => {
     setLocalPlayers(players || []);
@@ -382,20 +383,32 @@ export default function ChildHome({
       return;
     }
 
-    const { error } = await supabase.from("parent_players").insert({
-      user_id: userData.user.id,
-      player_id: player.id,
-    });
+    const { error } = await supabase.from("parent_players").upsert(
+      {
+        user_id: userData.user.id,
+        player_id: player.id,
+      },
+      {
+        onConflict: "user_id,player_id",
+      }
+    );
 
     setLinking(false);
 
-    if (error) {
+    if (error && !String(error.message || "").toLowerCase().includes("duplicate")) {
       alert(error.message);
       return;
     }
 
-    setLocalPlayers([player]);
-    selectPlayer(player.id);
+    setLocalPlayers(previous => {
+      if (previous.some(item => item.id === player.id)) return previous;
+      return [player];
+    });
+
+    localStorage.setItem("selectedPlayerId", player.id);
+    localStorage.setItem("selectedSquadKey", player.squad_key || squadConfig.key);
+    onSelectPlayer(player.id);
+    onChangeParentView("challenge");
   }
 
   async function upsertCompletion({
@@ -442,10 +455,6 @@ export default function ChildHome({
 
     await maybeAwardBadges(playerId);
     await refreshPlayerData(playerId);
-
-    if (status === "completed" || status === "awaiting_approval") {
-      playCompleteDing();
-    }
 
     return data;
   }
@@ -513,8 +522,9 @@ export default function ChildHome({
       activity: {
         id: result.activityId,
         title: result.title,
-        activity_key: "fitness",
+        activity_key: "run",
         target_unit: "km",
+        target_value: result.targetKm || result.distanceKm || 0,
       },
       status: "completed",
       completionType: result.type,
@@ -797,19 +807,6 @@ export default function ChildHome({
 
   return (
     <div className="page">
-      {squadRank ? (
-        <div className="home-leaderboard-position-card">
-          <span>🏆</span>
-          <div>
-            <strong>Squad Leaderboard</strong>
-            <p>
-              {selectedPlayer.name} is <b>#{squadRank.position}</b> of {squadRank.total}
-              {squadRank.xp ? ` with ${squadRank.xp} XP` : ""}.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
       <ChallengeHome
         supabase={supabase}
         squadConfig={squadConfig}
