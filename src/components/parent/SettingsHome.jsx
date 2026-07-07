@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSquadWhatsAppLink } from "../../lib/squadLinks";
+import TermsText from "../../auth/TermsText";
 
 function initials(name = "") {
   return name
@@ -188,7 +189,7 @@ export default function SettingsHome({
                   {players.length > 1 ? (
                     <button
                       type="button"
-                      className="settings-remove-child"
+                      className="settings-remove-child-link"
                       onClick={() => onRemoveChild?.(player)}
                       aria-label={`Remove ${player.name}`}
                     >
@@ -345,21 +346,7 @@ export default function SettingsHome({
               </p>
 
               <div className="terms-readonly-body">
-                <p>
-                  Parents/guardians are responsible for supervising children during
-                  the Fingallians Fitness Challenge.
-                </p>
-                <p>
-                  Children should only complete runs and activities in safe locations,
-                  with an adult where appropriate, and should avoid roads and unsafe areas.
-                </p>
-                <p>
-                  GPS runs, manual runs, skills, squad sessions and bonus activities
-                  are used for challenge tracking only.
-                </p>
-                <p>
-                  Coach approval may be required before some activities are awarded points.
-                </p>
+                <TermsText />
               </div>
             </div>
           </div>
