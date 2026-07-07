@@ -169,32 +169,14 @@ export default function SettingsHome({
                   key={player.id}
                   className={
                     player.id === selectedPlayer.id
-                      ? "settings-child-row active"
-                      : "settings-child-row"
+                      ? "settings-child-line active"
+                      : "settings-child-line"
                   }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
                 >
                   <button
                     type="button"
+                    className="settings-child-box"
                     onClick={() => onSelectChild?.(player)}
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      minWidth: 0,
-                      border: 0,
-                      background: "transparent",
-                      color: "inherit",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      padding: 0,
-                    }}
                   >
                     <span>{initials(player.name)}</span>
                     <div>
@@ -206,8 +188,9 @@ export default function SettingsHome({
                   {players.length > 1 ? (
                     <button
                       type="button"
-                      className="button secondary danger-button"
+                      className="settings-remove-child"
                       onClick={() => onRemoveChild?.(player)}
+                      aria-label={`Remove ${player.name}`}
                     >
                       Remove
                     </button>

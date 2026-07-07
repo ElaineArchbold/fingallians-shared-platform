@@ -19,8 +19,8 @@ const ADMIN_TABS = [
   { key: "approvals", label: "Approvals", icon: "🔔" },
   { key: "players", label: "Players", icon: "👧" },
   { key: "plans", label: "Plans", icon: "🗓️" },
-  { key: "migration", label: "Migration", icon: "🧭", superAdminOnly: true },
   { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
+  { key: "migration", label: "Migration", icon: "🧭", superAdminOnly: true },
 ];
 
 function displaySquad(key) {
@@ -188,6 +188,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [activities, setActivities] = useState([]);
   const [termsRows, setTermsRows] = useState([]);
   const [migrationRows, setMigrationRows] = useState([]);
+  const [migrationFilter, setMigrationFilter] = useState("all");
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailModal, setDetailModal] = useState(null);
   const [planWeek, setPlanWeek] = useState(1);
@@ -199,6 +200,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [coachRefreshKey, setCoachRefreshKey] = useState(0);
 
   const leaderboardRef = useRef(null);
+  const migrationListRef = useRef(null);
 
   const visibleSquads = isSuperAdmin
     ? SQUADS
@@ -223,6 +225,23 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         return adminSquad === "all" || !detailsSquad || detailsSquad === adminSquad;
       })
     : [];
+
+  function migrationRowsForFilter(filterKey = "all") {
+    return filteredMigrationRows.filter(row => {
+      if (filterKey === "all") return true;
+      if (filterKey === "parents") return Boolean(row.parent_email);
+      if (filterKey === "accounts") return ["account_created", "password_created"].includes(row.event);
+      if (filterKey === "logins") return row.event === "login";
+      if (filterKey === "children") return row.event === "child_linked" || row.event === "child_removed";
+      if (filterKey === "today") {
+        if (!row.created_at) return false;
+        return new Date(row.created_at).toDateString() === new Date().toDateString();
+      }
+      return true;
+    });
+  }
+
+  const visibleMigrationRows = migrationRowsForFilter(migrationFilter);
 
   const migratedParentEmails = new Set(
     filteredMigrationRows
@@ -316,6 +335,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   useEffect(() => {
     loadAdminData();
   }, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin && activeTab === "migration") {
+      setActiveTab("overview");
+    }
+  }, [isSuperAdmin, activeTab]);
 
   useEffect(() => {
     const channel = supabase
@@ -1301,69 +1326,121 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
     const loginCount = filteredMigrationRows.filter(row => row.event === "login").length;
     const accountCount = filteredMigrationRows.filter(row => ["account_created", "password_created"].includes(row.event)).length;
-    const childLinkCount = filteredMigrationRows.filter(row => row.event === "child_linked").length;
+    const childLinkCount = filteredMigrationRows.filter(row => row.event === "child_linked" || row.event === "child_removed").length;
+
+    const statCards = [
+      {
+        key: "parents",
+        icon: "👨‍👩‍👧",
+        value: migratedParentEmails.size,
+        label: "Parents seen",
+      },
+      {
+        key: "accounts",
+        icon: "🔐",
+        value: accountCount,
+        label: "Accounts created",
+      },
+      {
+        key: "logins",
+        icon: "✅",
+        value: loginCount,
+        label: "Logins",
+      },
+      {
+        key: "children",
+        icon: "🔗",
+        value: childLinkCount,
+        label: "Child activity",
+      },
+      {
+        key: "today",
+        icon: "📅",
+        value: migrationTodayCount,
+        label: "Events today",
+      },
+      {
+        key: "all",
+        icon: "🧾",
+        value: filteredMigrationRows.length,
+        label: "Total events",
+      },
+    ];
 
     return (
       <div className="admin-panel">
-        <div className="admin-stat-grid">
-          <button className="admin-stat-card">
-            <span>👨‍👩‍👧</span>
-            <strong>{migratedParentEmails.size}</strong>
-            <small>Parents seen</small>
-          </button>
-
-          <button className="admin-stat-card">
-            <span>🔐</span>
-            <strong>{accountCount}</strong>
-            <small>Accounts created</small>
-          </button>
-
-          <button className="admin-stat-card">
-            <span>✅</span>
-            <strong>{loginCount}</strong>
-            <small>Logins</small>
-          </button>
-
-          <button className="admin-stat-card">
-            <span>🔗</span>
-            <strong>{childLinkCount}</strong>
-            <small>Child links</small>
-          </button>
-
-          <button className="admin-stat-card">
-            <span>📅</span>
-            <strong>{migrationTodayCount}</strong>
-            <small>Events today</small>
-          </button>
-
-          <button className="admin-stat-card">
-            <span>🧾</span>
-            <strong>{filteredMigrationRows.length}</strong>
-            <small>Total events</small>
-          </button>
+        <div className="admin-stat-grid migration-stat-grid">
+          {statCards.map(card => (
+            <button
+              key={card.key}
+              type="button"
+              className={
+                migrationFilter === card.key
+                  ? "admin-stat-card migration-filter-card active"
+                  : "admin-stat-card migration-filter-card"
+              }
+              onClick={() => {
+                setMigrationFilter(card.key);
+                window.setTimeout(() => {
+                  migrationListRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }, 50);
+              }}
+            >
+              <span>{card.icon}</span>
+              <strong>{card.value}</strong>
+              <small>{card.label}</small>
+              <em className="migration-card-action">View full log →</em>
+            </button>
+          ))}
         </div>
 
-        <section className="admin-card">
-          <h2>Migration Audit Trail</h2>
-          <p className="muted">
-            SuperAdmin-only view of parent logins, account creation and child linking events from the new shared app.
+        <section className="admin-card" ref={migrationListRef}>
+          <div className="admin-section-title-row migration-title-row">
+            <div>
+              <h2>Migration Audit Trail</h2>
+              <p className="muted">
+                SuperAdmin-only view of parent logins, account creation and child linking events from the new shared app.
+              </p>
+            </div>
+
+            {migrationFilter !== "all" ? (
+              <button
+                type="button"
+                className="button secondary migration-clear-filter"
+                onClick={() => setMigrationFilter("all")}
+              >
+                Show All
+              </button>
+            ) : null}
+          </div>
+
+          <p className="migration-filter-note">
+            Showing <strong>{visibleMigrationRows.length}</strong> of <strong>{filteredMigrationRows.length}</strong> events.
           </p>
 
-          <div className="admin-feed-list">
-            {filteredMigrationRows.length ? (
-              filteredMigrationRows.slice(0, 120).map(row => {
+          <div className="admin-feed-list migration-feed-list">
+            {visibleMigrationRows.length ? (
+              visibleMigrationRows.map(row => {
                 const details = row.details || {};
                 const squad = details.squad_key || details.selected_squad || details.squadKey || "all squads";
                 const childName = details.child_name || details.player_name || "";
 
                 return (
-                  <div className="admin-feed-row" key={row.id}>
+                  <button
+                    type="button"
+                    className="admin-feed-row migration-feed-row"
+                    key={row.id}
+                    onClick={() => setDetailModal({ type: "migration", row })}
+                  >
                     <span>
                       {row.event === "login"
                         ? "✅"
                         : row.event === "account_created" || row.event === "password_created"
                           ? "🔐"
-                          : row.event === "child_linked"
+                          : row.event === "child_linked" || row.event === "child_removed"
                             ? "🔗"
                             : "🧭"}
                     </span>
@@ -1376,11 +1453,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                       </small>
                     </div>
                     <em>{dateTime(row.created_at)}</em>
-                  </div>
+                  </button>
                 );
               })
             ) : (
-              <p className="muted">No migration audit events have been logged yet.</p>
+              <p className="muted">No migration audit events match this filter yet.</p>
             )}
           </div>
         </section>
@@ -1407,6 +1484,118 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
   function renderDetailModal() {
     if (!detailModal) return null;
+
+    if (typeof detailModal === "object" && detailModal.type === "migrationList") {
+      const rows = migrationRowsForFilter(detailModal.filter || "all");
+
+      return (
+        <div className="admin-modal-backdrop" onClick={() => setDetailModal(null)}>
+          <div className="admin-modal migration-list-modal" onClick={event => event.stopPropagation()}>
+            <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
+
+            <h2>{detailModal.title || "Migration Log"}</h2>
+            <p className="muted">Full log for this migration total. Click any row to see the event details.</p>
+
+            <div className="admin-feed-list migration-feed-list migration-modal-feed-list">
+              {rows.length ? (
+                rows.map(row => {
+                  const details = row.details || {};
+                  const squad = details.squad_key || details.selected_squad || details.squadKey || "all squads";
+                  const childName = details.child_name || details.player_name || "";
+
+                  return (
+                    <button
+                      type="button"
+                      className="admin-feed-row migration-feed-row"
+                      key={row.id}
+                      onClick={() => setDetailModal({ type: "migration", row })}
+                    >
+                      <span>
+                        {row.event === "login"
+                          ? "✅"
+                          : row.event === "account_created" || row.event === "password_created"
+                            ? "🔐"
+                            : row.event === "child_linked" || row.event === "child_removed"
+                              ? "🔗"
+                              : "🧭"}
+                      </span>
+                      <div>
+                        <strong>{row.parent_email || "Unknown parent"}</strong>
+                        <small>
+                          {row.event}
+                          {childName ? ` · ${childName}` : ""}
+                          {squad ? ` · ${squad}` : ""}
+                        </small>
+                      </div>
+                      <em>{dateTime(row.created_at)}</em>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="muted">No migration audit events match this total yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (typeof detailModal === "object" && detailModal.type === "migration") {
+      const row = detailModal.row || {};
+      const details = row.details || {};
+      const detailEntries = Object.entries(details).filter(([, value]) => value !== null && value !== undefined && value !== "");
+
+      return (
+        <div className="admin-modal-backdrop" onClick={() => setDetailModal(null)}>
+          <div className="admin-modal migration-detail-modal" onClick={event => event.stopPropagation()}>
+            <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
+
+            <h2>Migration Event</h2>
+
+            <div className="migration-detail-card">
+              <span>
+                {row.event === "login"
+                  ? "✅"
+                  : row.event === "account_created" || row.event === "password_created"
+                    ? "🔐"
+                    : row.event === "child_linked" || row.event === "child_removed"
+                      ? "🔗"
+                      : "🧭"}
+              </span>
+              <div>
+                <strong>{row.parent_email || "Unknown parent"}</strong>
+                <small>{row.event || "migration_event"} · {dateTime(row.created_at)}</small>
+              </div>
+            </div>
+
+            <div className="migration-detail-list">
+              <div>
+                <strong>Email</strong>
+                <small>{row.parent_email || "—"}</small>
+              </div>
+              <div>
+                <strong>User ID</strong>
+                <small>{row.parent_user_id || "—"}</small>
+              </div>
+              <div>
+                <strong>Event</strong>
+                <small>{row.event || "—"}</small>
+              </div>
+              <div>
+                <strong>Time</strong>
+                <small>{row.created_at ? new Date(row.created_at).toLocaleString() : "—"}</small>
+              </div>
+              {detailEntries.map(([key, value]) => (
+                <div key={key}>
+                  <strong>{key.replaceAll("_", " ")}</strong>
+                  <small>{typeof value === "object" ? JSON.stringify(value) : String(value)}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     if (typeof detailModal === "object" && detailModal.type === "run") {
       const run = detailModal.run;
@@ -1956,8 +2145,8 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (activeTab === "approvals") return renderApprovals();
     if (activeTab === "players") return renderPlayers();
     if (activeTab === "plans") return renderPlans();
-    if (activeTab === "migration") return renderMigration();
     if (activeTab === "leaderboard") return renderLeaderboard();
+    if (activeTab === "migration") return renderMigration();
     return renderOverview();
   }
 
