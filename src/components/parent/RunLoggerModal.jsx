@@ -4,6 +4,21 @@ import * as htmlToImage from "html-to-image";
 
 const DEFAULT_CENTER = [53.389, -6.246];
 
+const RUN_COACH_NOTES = [
+  "Start steady, listen to your body, and do what you can. If it feels too much, slow down or split the distance over two runs.",
+  "Nice and easy for the first minute. Find your rhythm, keep breathing, and build from there.",
+  "Run tall, relax your shoulders, and keep your steps light. You have got this.",
+  "Do not sprint from the start. A steady run beats a rushed one every time.",
+  "Pick a safe route, keep your head up, and enjoy ticking off another challenge run.",
+  "Small steps, steady breathing, strong finish. Go at your own pace.",
+  "Focus on effort, not speed. Every run counts toward your challenge.",
+  "Start calm, stay safe, and remember to smile when you finish."
+];
+
+function getRandomCoachNote() {
+  return RUN_COACH_NOTES[Math.floor(Math.random() * RUN_COACH_NOTES.length)];
+}
+
 function toRad(value) {
   return (value * Math.PI) / 180;
 }
@@ -89,6 +104,7 @@ export default function RunLoggerModal({
   const [holdPercent, setHoldPercent] = useState(0);
   const [countdownStep, setCountdownStep] = useState("");
   const [showStartCoachNote, setShowStartCoachNote] = useState(false);
+  const [coachNote, setCoachNote] = useState(() => getRandomCoachNote());
 
   const [manualDistance, setManualDistance] = useState(
     activity?.target_unit === "km" ? String(activity.target_value || "") : ""
@@ -121,6 +137,24 @@ export default function RunLoggerModal({
     savingRef.current = false;
     setManualDistance(activity?.target_unit === "km" ? String(activity.target_value || "") : "");
     setManualMinutes("");
+    setCoachNote(getRandomCoachNote());
+    setShowStartCoachNote(true);
+
+    if (coachNoteTimeoutRef.current) {
+      clearTimeout(coachNoteTimeoutRef.current);
+    }
+
+    coachNoteTimeoutRef.current = setTimeout(() => {
+      setShowStartCoachNote(false);
+      coachNoteTimeoutRef.current = null;
+    }, 4500);
+
+    return () => {
+      if (coachNoteTimeoutRef.current) {
+        clearTimeout(coachNoteTimeoutRef.current);
+        coachNoteTimeoutRef.current = null;
+      }
+    };
   }, [activity?.id, manualOnly, activity?.target_unit, activity?.target_value]);
 
   useEffect(() => {
@@ -173,6 +207,15 @@ export default function RunLoggerModal({
     }
 
     onClose();
+  }
+
+  function dismissCoachNote() {
+    if (coachNoteTimeoutRef.current) {
+      clearTimeout(coachNoteTimeoutRef.current);
+      coachNoteTimeoutRef.current = null;
+    }
+
+    setShowStartCoachNote(false);
   }
 
   function getAudioContext() {
@@ -278,16 +321,6 @@ export default function RunLoggerModal({
     });
   }
 
-  function dismissCoachNoteAndStart() {
-    if (coachNoteTimeoutRef.current) {
-      clearTimeout(coachNoteTimeoutRef.current);
-      coachNoteTimeoutRef.current = null;
-    }
-
-    setShowStartCoachNote(false);
-    startTrafficLightCountdown();
-  }
-
   function beginStartCountdown() {
     if (!navigator.geolocation) {
       setGpsStatus("GPS is not available. Use manual entry instead.");
@@ -295,14 +328,11 @@ export default function RunLoggerModal({
       return;
     }
 
-    if (countdownStep || tracking || showStartCoachNote) return;
+    if (countdownStep || tracking) return;
 
+    dismissCoachNote();
     primeAudioContext();
-    setShowStartCoachNote(true);
-
-    coachNoteTimeoutRef.current = setTimeout(() => {
-      dismissCoachNoteAndStart();
-    }, 5000);
+    startTrafficLightCountdown();
   }
 
   function startGps() {
@@ -456,7 +486,6 @@ export default function RunLoggerModal({
     stopTracking();
     setTracking(false);
     setShowConfirmFinish(false);
-    savingRef.current = true;
     savingRef.current = true;
     setSaving(true);
 
@@ -872,8 +901,8 @@ export default function RunLoggerModal({
             <p className="run-status">{gpsStatus}</p>
 
             {!tracking ? (
-              <button className="button primary" onClick={beginStartCountdown} disabled={Boolean(countdownStep || showStartCoachNote)}>
-                {showStartCoachNote || countdownStep ? "Starting…" : "▶ START GPS RUN"}
+              <button className="button primary" onClick={beginStartCountdown} disabled={Boolean(countdownStep)}>
+                {countdownStep ? "Starting…" : "▶ START GPS RUN"}
               </button>
             ) : (
               <div className="run-action-grid">
@@ -931,19 +960,16 @@ export default function RunLoggerModal({
                 className="run-coach-note-close"
                 type="button"
                 aria-label="Close coach note"
-                onClick={dismissCoachNoteAndStart}
+                onClick={dismissCoachNote}
               >
                 ×
               </button>
 
               <h2>Coach Note</h2>
-              <p>
-                Start steady, listen to your body, and do what you can. If it feels too much,
-                slow down or split the distance over two runs.
-              </p>
+              <p>{coachNote}</p>
               <p className="run-coach-note-water">💧 Have you had enough water today?</p>
 
-              <small>Starting automatically in a few seconds…</small>
+              <small>GPS or manual will be ready in a few seconds…</small>
             </div>
           </div>
         ) : null}
