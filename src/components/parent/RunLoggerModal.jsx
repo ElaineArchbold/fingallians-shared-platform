@@ -105,6 +105,7 @@ export default function RunLoggerModal({
   const countdownTimeoutRef = useRef(null);
   const coachNoteTimeoutRef = useRef(null);
   const savingRef = useRef(false);
+  const audioContextRef = useRef(null);
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
@@ -133,10 +134,15 @@ export default function RunLoggerModal({
 
     return () => {
       window.removeEventListener("beforeunload", blockRefresh);
+    };
+  }, [tracking]);
+
+  useEffect(() => {
+    return () => {
       stopTracking();
       cancelHoldFinish();
     };
-  }, [tracking]);
+  }, []);
 
   function stopTracking() {
     if (watchRef.current) {
@@ -169,12 +175,48 @@ export default function RunLoggerModal({
     onClose();
   }
 
-  function playCountdownTone(step) {
+  function getAudioContext() {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
+      if (!AudioContext) return null;
 
-      const context = new AudioContext();
+      if (!audioContextRef.current || audioContextRef.current.state === "closed") {
+        audioContextRef.current = new AudioContext();
+      }
+
+      if (audioContextRef.current.state === "suspended") {
+        audioContextRef.current.resume?.();
+      }
+
+      return audioContextRef.current;
+    } catch {
+      return null;
+    }
+  }
+
+  function primeAudioContext() {
+    const context = getAudioContext();
+    if (!context) return;
+
+    try {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.01);
+    } catch {
+      // Ignore audio priming errors.
+    }
+  }
+
+  function playCountdownTone(step) {
+    try {
+      const context = getAudioContext();
+      if (!context) return;
+
       const now = context.currentTime;
 
       const notes =
@@ -182,21 +224,21 @@ export default function RunLoggerModal({
           ? [392, 523]
           : step === "SET"
             ? [523, 659]
-            : [659, 784, 1046];
+            : [659, 784, 1046, 1318];
 
       notes.forEach((frequency, index) => {
-        const start = now + index * 0.085;
-        const duration = step === "GO!" ? 0.34 : 0.22;
+        const start = now + index * 0.075;
+        const duration = step === "GO!" ? 0.38 : 0.24;
 
         const oscillator = context.createOscillator();
         const gain = context.createGain();
 
         oscillator.type = step === "GO!" ? "square" : "sawtooth";
         oscillator.frequency.setValueAtTime(frequency, start);
-        oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.06, start + duration);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.08, start + duration);
 
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.018);
+        gain.gain.exponentialRampToValueAtTime(0.26, start + 0.018);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
         oscillator.connect(gain);
@@ -205,10 +247,8 @@ export default function RunLoggerModal({
         oscillator.start(start);
         oscillator.stop(start + duration + 0.02);
       });
-
-      setTimeout(() => context.close?.(), 800);
     } catch {
-      // Sound is a bonus only. Some phones block audio until after interaction.
+      // Sound is a bonus only.
     }
   }
 
@@ -257,6 +297,7 @@ export default function RunLoggerModal({
 
     if (countdownStep || tracking || showStartCoachNote) return;
 
+    primeAudioContext();
     setShowStartCoachNote(true);
 
     coachNoteTimeoutRef.current = setTimeout(() => {
@@ -265,6 +306,9 @@ export default function RunLoggerModal({
   }
 
   function startGps() {
+    setCountdownStep("");
+    setShowStartCoachNote(false);
+
     if (!navigator.geolocation) {
       setGpsStatus("GPS is not available. Use manual entry instead.");
       setMode("manual");
@@ -412,6 +456,7 @@ export default function RunLoggerModal({
     stopTracking();
     setTracking(false);
     setShowConfirmFinish(false);
+    savingRef.current = true;
     savingRef.current = true;
     setSaving(true);
 
@@ -838,16 +883,21 @@ export default function RunLoggerModal({
         {showStartCoachNote ? (
           <div className="run-coach-note-backdrop">
             <div className="run-coach-note-modal">
+              <button
+                className="run-coach-note-close"
+                type="button"
+                aria-label="Close coach note"
+                onClick={dismissCoachNoteAndStart}
+              >
+                ×
+              </button>
+
               <h2>Coach Note</h2>
               <p>
                 Start steady, listen to your body, and do what you can. If it feels too much,
                 slow down or split the distance over two runs.
               </p>
               <p className="run-coach-note-water">💧 Have you had enough water today?</p>
-
-              <button className="button primary" onClick={dismissCoachNoteAndStart}>
-                I'm Ready
-              </button>
 
               <small>Starting automatically in a few seconds…</small>
             </div>

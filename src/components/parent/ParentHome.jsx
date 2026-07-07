@@ -539,15 +539,10 @@ export default function ParentHome({
       return;
     }
 
-    const { error } = await supabase.from("parent_players").upsert(
-      {
-        user_id: userData.user.id,
-        player_id: player.id,
-      },
-      {
-        onConflict: "user_id,player_id",
-      }
-    );
+    const { error } = await supabase.from("parent_players").insert({
+      user_id: userData.user.id,
+      player_id: player.id,
+    });
 
     setLinking(false);
 
@@ -693,29 +688,33 @@ export default function ParentHome({
       awardPoints: true,
     });
 
-    const { error: proofError } = await supabase.from("run_proofs").insert({
-      squad: squadConfig.shortLabel || squadConfig.label || null,
-      squad_key: selectedPlayer?.squad_key || squadConfig.key,
-      player_id: result.playerId,
-      player_name: selectedPlayer.name,
-      task_key: result.activityId,
-      week: challengeWeek,
-      label: result.title,
-      target: result.targetKm ? `${result.targetKm} km` : null,
-      run_type: result.type,
-      distance_km: result.distanceKm,
-      duration_min: result.durationMin,
-      pace_min_per_km:
-        result.distanceKm > 0 && result.durationMin
-          ? Number((result.durationMin / result.distanceKm).toFixed(2))
-          : null,
-      note: result.type === "gps" ? "Verified GPS run" : "Manual run entry",
-      route_points: result.type === "gps" ? result.routePoints || [] : null,
-      saved_at: result.savedAt,
-      updated_at: new Date().toISOString(),
-      has_screenshot: result.type === "gps" && Array.isArray(result.routePoints) && result.routePoints.length > 0,
-      share_image_url: null,
-    });
+    const { data: proof, error: proofError } = await supabase
+      .from("run_proofs")
+      .insert({
+        squad: squadConfig.shortLabel || squadConfig.label || null,
+        squad_key: selectedPlayer?.squad_key || squadConfig.key,
+        player_id: result.playerId,
+        player_name: selectedPlayer.name,
+        task_key: result.activityId,
+        week: challengeWeek,
+        label: result.title,
+        target: result.targetKm ? `${result.targetKm} km` : null,
+        run_type: result.type,
+        distance_km: result.distanceKm,
+        duration_min: result.durationMin,
+        pace_min_per_km:
+          result.distanceKm > 0 && result.durationMin
+            ? Number((result.durationMin / result.distanceKm).toFixed(2))
+            : null,
+        note: result.type === "gps" ? "Verified GPS run" : "Manual run entry",
+        route_points: result.type === "gps" ? result.routePoints || [] : null,
+        saved_at: result.savedAt,
+        updated_at: new Date().toISOString(),
+        has_screenshot: result.type === "gps" && Array.isArray(result.routePoints) && result.routePoints.length > 0,
+        share_image_url: null,
+      })
+      .select()
+      .single();
 
     if (proofError) {
       throw proofError;
@@ -723,35 +722,57 @@ export default function ParentHome({
 
     await maybeAwardBadges(result.playerId);
     await refreshPlayerData(result.playerId);
-    return completion;
+
+    return {
+      ...completion,
+      runProofId: proof?.id,
+      proof,
+    };
   }
 
   async function deleteManualRun(run) {
-    const { error } = await supabase
-      .from("run_proofs")
-      .delete()
-      .eq("id", run.id)
-      .eq("run_type", "manual");
+    const playerId = run.playerId || run.player_id || selectedPlayer?.id;
+    const activityId = run.activityId || run.task_key;
 
-    if (error) {
-      alert(error.message);
+    if (!playerId || !activityId) {
+      alert("Could not identify the manual run to remove.");
       return;
     }
 
-    if (selectedPlayer?.id && run.task_key) {
-      await supabase
-        .from("activity_completions")
+    if (run.id) {
+      const { error } = await supabase
+        .from("run_proofs")
         .delete()
-        .eq("player_id", selectedPlayer.id)
-        .eq("activity_id", run.task_key)
-        .eq("completion_type", "manual");
+        .eq("id", run.id)
+        .eq("run_type", "manual");
 
-      await removeXpForActivity(selectedPlayer.id, run.task_key);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+    } else {
+      await supabase
+        .from("run_proofs")
+        .delete()
+        .eq("player_id", playerId)
+        .eq("task_key", activityId)
+        .eq("run_type", "manual");
     }
 
-    if (selectedPlayer?.id) {
-      await refreshPlayerData(selectedPlayer.id);
+    const { error: completionError } = await supabase
+      .from("activity_completions")
+      .delete()
+      .eq("player_id", playerId)
+      .eq("activity_id", activityId)
+      .eq("completion_type", "manual");
+
+    if (completionError) {
+      alert(completionError.message);
+      return;
     }
+
+    await removeXpForActivity(playerId, activityId);
+    await refreshPlayerData(playerId);
   }
 
   function openWeekFromProgress(week) {
@@ -953,6 +974,7 @@ export default function ParentHome({
           selectedPlayer={selectedPlayer}
           onClose={() => setRunActivity(null)}
           onSaved={handleRunSaved}
+          onDeleted={deleteManualRun}
         />
       ) : null}
       {renderChildSwitcherModal()}
