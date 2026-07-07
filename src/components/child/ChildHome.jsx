@@ -271,7 +271,7 @@ export default function ChildHome({
         .delete()
         .eq("player_id", player.id)
         .eq("activity_id", activity.id)
-        .neq("gps_verified", true);
+        .or("gps_verified.is.false,gps_verified.is.null");
 
       if (error) {
         alert(error.message);

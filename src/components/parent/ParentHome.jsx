@@ -621,7 +621,7 @@ export default function ParentHome({
         .delete()
         .eq("player_id", selectedPlayer.id)
         .eq("activity_id", activity.id)
-        .neq("gps_verified", true);
+        .or("gps_verified.is.false,gps_verified.is.null");
 
       if (error) {
         alert(error.message);
@@ -730,16 +730,44 @@ export default function ParentHome({
     };
   }
 
-  async function deleteManualRun(run) {
+  async function deleteManualRun(run = {}) {
     const flowId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const playerId = run?.playerId || run?.player_id || selectedPlayer?.id;
-    const activityId = run?.activityId || run?.task_key;
+
+    const playerId =
+      run?.playerId ||
+      run?.player_id ||
+      run?.player?.id ||
+      selectedPlayer?.id;
+
+    const activityId =
+      run?.activityId ||
+      run?.activity_id ||
+      run?.task_key ||
+      run?.activity?.id ||
+      run?.id;
+
+    const proofId =
+      run?.runProofId ||
+      run?.proofId ||
+      run?.proof?.id ||
+      (run?.task_key || run?.run_type ? run?.id : null);
 
     console.groupCollapsed("[manual-run-delete]", flowId);
-    console.log("handler fired", { run, playerId, activityId });
+    console.log("handler fired", {
+      run,
+      proofId,
+      playerId,
+      activityId,
+      selectedPlayerId: selectedPlayer?.id,
+    });
 
     if (!playerId || !activityId) {
-      console.error("Missing playerId or activityId", { playerId, activityId, run });
+      console.error("Missing playerId or activityId", {
+        proofId,
+        playerId,
+        activityId,
+        run,
+      });
       console.groupEnd();
       alert("Could not identify the manual run to remove.");
       return;
@@ -755,50 +783,67 @@ export default function ParentHome({
 
     const previousSavedRuns = savedRuns;
     const previousCompletions = completions;
+    const previousXpTransactions = xpTransactions;
+    const previousXpTotal = xpTotal;
 
-    setSavedRuns(current =>
-      current.filter(item =>
-        run?.id
-          ? item.id !== run.id
-          : !(
-              item.player_id === playerId &&
-              item.task_key === activityId &&
-              item.run_type === "manual"
-            )
-      )
-    );
+    const matchesManualRun = item => {
+      if (proofId && item.id === proofId) return true;
 
-    setCompletions(current =>
-      current.filter(item =>
-        !(
-          item.player_id === playerId &&
-          item.activity_id === activityId &&
-          item.gps_verified !== true
-        )
-      )
+      return (
+        item.player_id === playerId &&
+        item.task_key === activityId &&
+        item.run_type === "manual"
+      );
+    };
+
+    const matchesCompletion = item =>
+      item.player_id === playerId &&
+      item.activity_id === activityId &&
+      item.gps_verified !== true;
+
+    setSavedRuns(current => current.filter(item => !matchesManualRun(item)));
+    setCompletions(current => current.filter(item => !matchesCompletion(item)));
+    setXpTransactions(current =>
+      current.filter(item => !(item.player_id === playerId && item.activity_id === activityId))
     );
+    setXpTotal(currentTotal => {
+      const removedXp = previousXpTransactions
+        .filter(item => item.player_id === playerId && item.activity_id === activityId)
+        .reduce((total, item) => total + Number(item.xp || 0), 0);
+
+      return Math.max(0, Number(currentTotal || 0) - removedXp);
+    });
 
     try {
-      let proofQuery = supabase
-        .from("run_proofs")
-        .delete()
-        .eq("player_id", playerId)
-        .eq("task_key", activityId)
-        .eq("run_type", "manual")
-        .select("id,player_id,task_key,run_type");
+      let deletedProofs = [];
+      let proofError = null;
 
-      if (run?.id) {
-        proofQuery = supabase
+      if (proofId) {
+        const response = await supabase
           .from("run_proofs")
           .delete()
-          .eq("id", run.id)
+          .eq("id", proofId)
+          .eq("run_type", "manual")
+          .select("id,player_id,task_key,run_type");
+
+        deletedProofs = response.data || [];
+        proofError = response.error;
+      }
+
+      if (proofError) throw proofError;
+
+      if (!deletedProofs.length) {
+        const response = await supabase
+          .from("run_proofs")
+          .delete()
           .eq("player_id", playerId)
           .eq("task_key", activityId)
           .eq("run_type", "manual")
           .select("id,player_id,task_key,run_type");
-      }
 
-      const { data: deletedProofs, error: proofError } = await proofQuery;
+        deletedProofs = response.data || [];
+        proofError = response.error;
+      }
 
       if (proofError) throw proofError;
 
@@ -809,7 +854,7 @@ export default function ParentHome({
         .delete()
         .eq("player_id", playerId)
         .eq("activity_id", activityId)
-        .neq("gps_verified", true)
+        .or("completion_type.eq.manual,gps_verified.is.false,gps_verified.is.null")
         .select("id,player_id,activity_id,completion_type,gps_verified");
 
       if (completionError) throw completionError;
@@ -829,12 +874,22 @@ export default function ParentHome({
 
       await refreshPlayerData(playerId);
 
+      if (!deletedProofs.length) {
+        console.warn("No run_proofs rows matched the delete query.", {
+          proofId,
+          playerId,
+          activityId,
+        });
+      }
+
       console.log("refresh complete");
     } catch (error) {
       console.error("manual run delete failed", error);
 
       setSavedRuns(previousSavedRuns);
       setCompletions(previousCompletions);
+      setXpTransactions(previousXpTransactions);
+      setXpTotal(previousXpTotal);
 
       alert(error?.message || "Could not remove this manual run.");
     } finally {
