@@ -241,17 +241,13 @@ export default function SettingsHome({
 
           <div className="settings-action-row">
             <button className="button primary" onClick={openChildLink}>
-              Open Child View
+              Open Child View in New Tab
             </button>
 
             <button className="button secondary" onClick={copyChildLink}>
               Copy Child Link
             </button>
           </div>
-
-          {childLink() ? (
-            <p className="settings-child-link-preview">{childLink()}</p>
-          ) : null}
 
           {copyMessage ? <p className="settings-message">{copyMessage}</p> : null}
         </div>

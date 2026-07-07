@@ -48,6 +48,12 @@ export default function ChildHome({
   squadConfig,
   childToken,
 }) {
+  function returnToParentView() {
+    localStorage.removeItem("childAccessToken");
+    localStorage.removeItem("childPlayerId");
+    localStorage.removeItem("childSquadKey");
+    window.location.href = "/";
+  }
   const [player, setPlayer] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -361,12 +367,22 @@ export default function ChildHome({
   }
 
   if (loading) {
-    return <div className="card">Opening child link…</div>;
+    return (
+      <div className="card">
+        <button className="child-parent-return-link" type="button" onClick={returnToParentView}>
+          ← Parent view
+        </button>
+        Opening child link…
+      </div>
+    );
   }
 
   if (loadError) {
     return (
       <div className="card">
+        <button className="child-parent-return-link" type="button" onClick={returnToParentView}>
+          ← Parent view
+        </button>
         <h2>Child Link</h2>
         <p className="muted">{loadError}</p>
       </div>
@@ -375,6 +391,10 @@ export default function ChildHome({
 
   return (
     <div className="page">
+      <button className="child-parent-return-link" type="button" onClick={returnToParentView}>
+        ← Parent view
+      </button>
+
       <ChallengeHome
         supabase={supabase}
         squadConfig={childSquadConfig}

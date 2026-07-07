@@ -57,9 +57,7 @@ function getChildLinkParams() {
   const pathMatch = window.location.pathname.match(/^\/child\/([^/]+)$/);
   const tokenFromPath = pathMatch?.[1] ? decodeURIComponent(pathMatch[1]) : "";
   const tokenFromQuery = params.get("child") || "";
-  const storedToken = localStorage.getItem("childAccessToken") || "";
-
-  const childToken = tokenFromPath || tokenFromQuery || storedToken;
+  const childToken = tokenFromPath || tokenFromQuery;
 
   if (childToken) {
     localStorage.setItem("childAccessToken", childToken);

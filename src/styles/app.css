@@ -10503,3 +10503,68 @@ body.is-child-link-mode .app-shell {
 .child-link-shell .topbar {
   margin-bottom: 14px;
 }
+
+/* Child link permanent-token flow */
+.settings-child-link-preview {
+  word-break: break-all;
+  background: #fff8f8;
+  border: 1px solid #f0e1df;
+  border-radius: 14px;
+  padding: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.child-link-shell {
+  min-height: 100vh;
+  padding-bottom: 18px !important;
+}
+
+body.is-child-link-mode .bottom-nav,
+body:has(.child-link-shell) .bottom-nav {
+  display: none !important;
+}
+
+body.is-child-link-mode .app-shell {
+  padding-bottom: 18px !important;
+}
+
+.child-link-shell .topbar {
+  margin-bottom: 14px;
+}
+
+
+.child-parent-return-link {
+  width: auto;
+  justify-self: start;
+  border: 1px solid rgba(197, 20, 23, .18);
+  background: white;
+  color: var(--club-red);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.child-link-shell .child-parent-return-link {
+  margin-bottom: 4px;
+}
+
+/* Child view week navigation fix
+   This overrides older CSS that hid week navigation buttons in child-link mode. */
+
+.child-link-shell .week-nav-card button {
+  display: inline-grid !important;
+  place-items: center;
+}
+
+.child-link-shell .week-nav-card {
+  justify-content: space-between !important;
+}
+
+body.is-child-link-mode .week-nav-card button {
+  display: inline-grid !important;
+  place-items: center;
+}
