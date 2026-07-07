@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSquadWhatsAppLink } from "../../lib/squadLinks";
-import TermsText from "../../auth/TermsText";
 
 function initials(name = "") {
   return name
@@ -31,6 +30,56 @@ function formatAcceptedDate(value) {
   }
 }
 
+function TermsText() {
+  return (
+    <div className="terms-copy">
+      <h2>Terms and Conditions</h2>
+
+      <h3>Parent / Guardian Responsibility</h3>
+      <p>
+        Parents and guardians are responsible for supervising children during the
+        Fingallians Summer Fitness Challenge. Children should only complete runs,
+        skills and activities in safe locations and with adult supervision where
+        appropriate.
+      </p>
+
+      <h3>Safety First</h3>
+      <p>
+        Children should avoid roads, unsafe routes, poor weather conditions and
+        any activity that feels too difficult. If a child feels unwell, sore or
+        unsafe, they should stop immediately and tell an adult.
+      </p>
+
+      <h3>GPS and Manual Runs</h3>
+      <p>
+        GPS and manual run entries are used only for challenge tracking. Route
+        information is not shown publicly in the app. Manual entries should be
+        completed honestly by a parent or guardian.
+      </p>
+
+      <h3>Challenge Tracking</h3>
+      <p>
+        Progress, XP, badges, completed activities, run entries and coach
+        approvals are used for the Fingallians Summer Fitness Challenge only.
+        Some activities may require coach approval before points are awarded.
+      </p>
+
+      <h3>Photos, Screenshots and Sharing</h3>
+      <p>
+        Parents and guardians are responsible for deciding whether to save or
+        share screenshots from the app. Please avoid sharing personal information
+        publicly.
+      </p>
+
+      <h3>Agreement</h3>
+      <p>
+        By continuing to use the app, you confirm that you are a parent or
+        guardian and that you accept these terms on behalf of your child.
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsHome({
   supabase,
   session,
@@ -52,8 +101,15 @@ export default function SettingsHome({
   const [addSquadKey, setAddSquadKey] = useState("");
   const [addPlayerId, setAddPlayerId] = useState("");
   const [showTerms, setShowTerms] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const whatsappLink = getSquadWhatsAppLink(squadConfig.key);
+  const hasMultipleChildren = players.length > 1;
 
   useEffect(() => {
     loadAllPlayers();
@@ -130,6 +186,44 @@ export default function SettingsHome({
     setAddPlayerId("");
   }
 
+  async function changePassword(event) {
+    event.preventDefault();
+    setPasswordBusy(true);
+    setPasswordError("");
+    setPasswordMessage("");
+
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordBusy(false);
+      setPasswordError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordBusy(false);
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    setPasswordBusy(false);
+
+    if (error) {
+      setPasswordError(error.message);
+      return;
+    }
+
+    setPasswordMessage("Password updated successfully.");
+    setNewPassword("");
+    setConfirmPassword("");
+
+    setTimeout(() => {
+      setShowPasswordModal(false);
+      setPasswordMessage("");
+      setPasswordError("");
+    }, 1400);
+  }
+
   return (
     <div className="page settings-home">
       <section className="player-card settings-player-card">
@@ -137,7 +231,21 @@ export default function SettingsHome({
 
         <div className="player-card-main">
           <p className="eyebrow">Settings</p>
-          <h2>{selectedPlayer.name}</h2>
+
+          <div className="settings-player-title-row">
+            <h2>{selectedPlayer.name}</h2>
+            {hasMultipleChildren ? (
+              <button
+                type="button"
+                className="child-name-switch"
+                onClick={onSwitchChild}
+                aria-label="Switch child"
+              >
+                ›
+              </button>
+            ) : null}
+          </div>
+
           <p>{squadConfig.shortLabel}</p>
 
           <div className="player-xp-bar">
@@ -148,10 +256,6 @@ export default function SettingsHome({
             Level {levelFromXp(xpTotal)} · {xpTotal} XP · {badges.length} badges
           </small>
         </div>
-
-        <button className="button secondary settings-switch-button" onClick={onSwitchChild}>
-          Switch
-        </button>
       </section>
 
       <section className="settings-card">
@@ -163,35 +267,41 @@ export default function SettingsHome({
             <p className="muted">{selectedPlayer.name}</p>
           </div>
 
-          {players.length ? (
-            <div className="settings-child-list">
+          {players.length > 1 ? (
+            <div className="settings-child-button-list">
               {players.map(player => (
                 <div
                   key={player.id}
                   className={
                     player.id === selectedPlayer.id
-                      ? "settings-child-box active"
-                      : "settings-child-box"
+                      ? "settings-linked-child active"
+                      : "settings-linked-child"
                   }
                 >
                   <button
                     type="button"
-                    className="settings-child-main"
                     onClick={() => onSelectChild?.(player)}
+                    aria-label={`Select ${player.name}`}
                   >
                     <span>{initials(player.name)}</span>
                     <div>
                       <strong>{player.name}</strong>
                       <small>{player.squad_key}</small>
+                      {player.id === selectedPlayer.id ? <em>Selected</em> : null}
                     </div>
                   </button>
 
-                  {players.length > 1 ? (
+                  {player.id !== selectedPlayer.id ? (
                     <button
                       type="button"
-                      className="settings-remove-child-link"
-                      onClick={() => onRemoveChild?.(player)}
-                      aria-label={`Remove ${player.name}`}
+                      className="settings-remove-child"
+                      onClick={() => {
+                        const ok = window.confirm(
+                          `Remove ${player.name} from this parent account?`
+                        );
+
+                        if (ok) onRemoveChild?.(player);
+                      }}
                     >
                       Remove
                     </button>
@@ -297,7 +407,11 @@ export default function SettingsHome({
         <h2>Account</h2>
 
         <div className="settings-card-content">
-          <button className="settings-row-button" type="button">
+          <button
+            className="settings-row-button"
+            type="button"
+            onClick={() => setShowPasswordModal(true)}
+          >
             <span>🔐 Change password</span>
             <strong>›</strong>
           </button>
@@ -329,6 +443,50 @@ export default function SettingsHome({
         </div>
       </section>
 
+      {showPasswordModal ? (
+        <div className="terms-modal-backdrop" onClick={() => setShowPasswordModal(false)}>
+          <form className="password-modal" onClick={event => event.stopPropagation()} onSubmit={changePassword}>
+            <button
+              className="terms-modal-close"
+              type="button"
+              onClick={() => setShowPasswordModal(false)}
+            >
+              ×
+            </button>
+
+            <h2>Change Password</h2>
+            <p className="muted">Choose a new password for this parent account.</p>
+
+            <label className="label">New password</label>
+            <input
+              className="input"
+              type="password"
+              value={newPassword}
+              onChange={event => setNewPassword(event.target.value)}
+              minLength={8}
+              required
+            />
+
+            <label className="label">Confirm password</label>
+            <input
+              className="input"
+              type="password"
+              value={confirmPassword}
+              onChange={event => setConfirmPassword(event.target.value)}
+              minLength={8}
+              required
+            />
+
+            {passwordError ? <p className="form-error">{passwordError}</p> : null}
+            {passwordMessage ? <p className="form-message">{passwordMessage}</p> : null}
+
+            <button className="button primary" disabled={passwordBusy}>
+              {passwordBusy ? "Saving…" : "Save Password"}
+            </button>
+          </form>
+        </div>
+      ) : null}
+
       {showTerms ? (
         <div className="terms-modal-backdrop" onClick={() => setShowTerms(false)}>
           <div className="terms-modal" onClick={event => event.stopPropagation()}>
@@ -340,14 +498,10 @@ export default function SettingsHome({
             </button>
 
             <div className="terms-readonly-card">
-              <h2>Terms and Conditions</h2>
-              <p className="muted">
+              <TermsText />
+              <p className="terms-accepted-line muted">
                 Accepted: {formatAcceptedDate(termsAcceptedAt)}
               </p>
-
-              <div className="terms-readonly-body">
-                <TermsText />
-              </div>
             </div>
           </div>
         </div>

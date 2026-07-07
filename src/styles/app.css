@@ -12008,3 +12008,214 @@ button.migration-feed-row:hover,
   font-weight: 900;
   cursor: pointer;
 }
+
+/* Add these at the bottom of App.css */
+
+.settings-player-card .settings-switch-button {
+  display: none !important;
+}
+
+.settings-player-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.settings-player-title-row h2 {
+  margin: 0;
+}
+
+.child-name-switch {
+  border: 0;
+  background: transparent !important;
+  color: inherit !important;
+  font-size: 24px !important;
+  font-weight: 900 !important;
+  line-height: 1;
+  padding: 0 3px;
+  cursor: pointer;
+}
+
+.settings-child-button-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-linked-child {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  background: #fff8f8;
+  border: 1px solid #f0e1df;
+  border-radius: 16px;
+  padding: 10px 12px;
+}
+
+.settings-linked-child.active {
+  border-color: var(--club-red);
+  background: rgba(197, 20, 23, .08);
+}
+
+.settings-linked-child > button:first-child {
+  border: 0;
+  background: transparent;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.settings-linked-child span {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--club-red);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+}
+
+.settings-linked-child strong {
+  display: block;
+  color: var(--text);
+}
+
+.settings-linked-child small {
+  display: block;
+  color: var(--text-secondary);
+}
+
+.settings-linked-child em {
+  font-style: normal;
+  color: #16843d;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.settings-remove-child {
+  border: 0;
+  background: transparent;
+  color: var(--club-red);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 4px 0 4px 8px;
+  cursor: pointer;
+  text-decoration: underline;
+  justify-self: end;
+}
+
+.password-modal {
+  width: min(460px, 100%);
+  background: white;
+  border-radius: 24px;
+  padding: 18px;
+  position: relative;
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 10px;
+}
+
+.password-modal h2 {
+  margin: 0 42px 0 0;
+  font-family: var(--font-heading);
+  color: var(--club-red);
+  text-transform: uppercase;
+}
+
+.terms-copy h2 {
+  margin: 0 44px 14px 0;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+}
+
+.terms-copy h3 {
+  margin: 18px 0 6px;
+  color: var(--text);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  font-size: 17px;
+}
+
+.terms-copy p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.terms-accepted-line {
+  margin-top: 18px;
+  text-align: left;
+}
+
+.migration-note-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, .72);
+  padding: 16px;
+}
+
+.migration-note-modal {
+  width: min(480px, 100%);
+  background: white;
+  border-radius: 24px;
+  padding: 22px;
+  text-align: center;
+  position: relative;
+  box-shadow: var(--shadow-lg);
+  border: 4px solid var(--club-gold);
+}
+
+.migration-note-modal h2 {
+  margin: 0 36px 10px;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+}
+
+.migration-note-modal p {
+  color: var(--text-secondary);
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.migration-note-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: 0;
+  background: #f8e8eb;
+  color: #a51022;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 22px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.password-eye-button {
+  min-width: 54px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+@media (max-width: 520px) {
+  .settings-linked-child {
+    grid-template-columns: 1fr auto;
+  }
+
+  .settings-remove-child {
+    justify-self: end;
+  }
+}

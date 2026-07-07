@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 const REMEMBER_EMAIL_KEY = "fingalliansRememberedEmail";
 const KEEP_LOGGED_IN_KEY = "fingalliansKeepLoggedIn";
-const MIGRATION_POPUP_KEY = "fingalliansMigrationPasswordPopupSeen";
 
 const SQUADS = [
   { key: "2014-boys", label: "2014 Boys" },
@@ -11,16 +10,32 @@ const SQUADS = [
   { key: "2017-girls", label: "2017 Girls" },
 ];
 
-function browserDetails() {
-  const params = new URLSearchParams(window.location.search);
-  return {
-    user_agent: navigator.userAgent,
-    language: navigator.language,
-    platform: navigator.platform,
-    path: window.location.pathname,
-    url: window.location.href,
-    from_app: params.get("from_app") || params.get("old_app") || localStorage.getItem("fingalliansFromApp") || null,
-  };
+const APP_URL = "https://fingallians-shared-platform.vercel.app";
+
+function getFromApp() {
+  try {
+    return new URLSearchParams(window.location.search).get("from_app") || "direct";
+  } catch {
+    return "direct";
+  }
+}
+
+async function writeAudit(supabase, event, email, details = {}, parentUserId = null) {
+  try {
+    await supabase.from("migration_audit").insert({
+      parent_email: email || null,
+      parent_user_id: parentUserId || null,
+      event,
+      details: {
+        from_app: getFromApp(),
+        url: window.location.href,
+        user_agent: navigator.userAgent,
+        ...details,
+      },
+    });
+  } catch (error) {
+    console.warn("migration audit failed", error);
+  }
 }
 
 export default function AuthPanel({
@@ -38,17 +53,24 @@ export default function AuthPanel({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [showMigrationPopup, setShowMigrationPopup] = useState(false);
+  const [showMigrationNote, setShowMigrationNote] = useState(true);
+  const [resetMode, setResetMode] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
   const [confirmResetPassword, setConfirmResetPassword] = useState("");
-  const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const fromApp = params.get("from_app") || params.get("old_app");
+    const urlMode = params.get("mode");
 
-    if (fromApp) {
-      localStorage.setItem("fingalliansFromApp", fromApp);
+    if (urlMode === "signup" || urlMode === "create") {
+      setMode("signup");
+      setShowMigrationNote(true);
+    }
+
+    if (window.location.hash.includes("type=recovery") || params.get("type") === "recovery") {
+      setResetMode(true);
+      setMode("reset");
+      setShowMigrationNote(false);
     }
 
     const rememberedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY);
@@ -57,38 +79,6 @@ export default function AuthPanel({
       setEmail(rememberedEmail);
       setRememberMe(true);
     }
-
-    const popupSeen = localStorage.getItem(MIGRATION_POPUP_KEY);
-    if (!popupSeen) {
-      setShowMigrationPopup(true);
-      localStorage.setItem(MIGRATION_POPUP_KEY, "true");
-    }
-
-    const hash = window.location.hash || "";
-    const search = window.location.search || "";
-
-    if (hash.includes("type=recovery") || search.includes("type=recovery")) {
-      setRecoveryMode(true);
-      setMode("reset");
-      setMessage("Enter a new password below.");
-    }
-
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setRecoveryMode(true);
-        setMode("reset");
-        setMessage("Enter a new password below.");
-        await logMigrationAudit("password_recovery_opened", session?.user?.email || cleanEmail(), {}, session?.user?.id || null);
-      }
-
-      if (event === "SIGNED_IN" && session?.user?.email) {
-        await logMigrationAudit("signed_in_event", session.user.email, { source: "auth_state_change" }, session.user.id);
-      }
-    });
-
-    return () => {
-      listener?.subscription?.unsubscribe?.();
-    };
   }, []);
 
   useEffect(() => {
@@ -119,158 +109,6 @@ export default function AuthPanel({
     }
   }
 
-  async function logMigrationAudit(event, parentEmail, details = {}, userId = null) {
-    try {
-      await supabase.from("migration_audit").insert({
-        parent_email: parentEmail || null,
-        parent_user_id: userId || null,
-        event,
-        details: {
-          squad_key: selectedSquad || squadKey || squadConfig?.key || null,
-          ...browserDetails(),
-          ...details,
-        },
-      });
-    } catch (auditError) {
-      console.warn("Migration audit failed", auditError);
-    }
-  }
-
-  async function claimMigratedChildren(userId, parentEmail) {
-    if (!userId || !parentEmail) return 0;
-
-    try {
-      const { data: existingLinks } = await supabase
-        .from("parent_players")
-        .select("player_id")
-        .eq("user_id", userId);
-
-      const existingIds = new Set((existingLinks || []).map(row => row.player_id));
-
-      const { data: candidatePlayers, error: playerError } = await supabase
-        .from("players")
-        .select("id,parent_email,squad_key,name")
-        .ilike("parent_email", parentEmail);
-
-      if (playerError) {
-        console.warn("Could not check migrated children", playerError);
-        return 0;
-      }
-
-      const rowsToInsert = (candidatePlayers || [])
-        .filter(player => !existingIds.has(player.id))
-        .map(player => ({
-          user_id: userId,
-          player_id: player.id,
-        }));
-
-      if (!rowsToInsert.length) return 0;
-
-      const { error: linkError } = await supabase
-        .from("parent_players")
-        .insert(rowsToInsert);
-
-      if (linkError) {
-        console.warn("Could not auto-link migrated children", linkError);
-        return 0;
-      }
-
-      return rowsToInsert.length;
-    } catch (claimError) {
-      console.warn("Auto-link migrated children failed", claimError);
-      return 0;
-    }
-  }
-
-  async function handleCreateOrContinue(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    setMessage("");
-
-    const loginEmail = cleanEmail();
-
-    if (!loginEmail || !password) {
-      setLoading(false);
-      setError("Enter your email and choose a password.");
-      return;
-    }
-
-    await logMigrationAudit("auth_attempt", loginEmail, { mode: "create_or_continue" });
-
-    const loginResult = await supabase.auth.signInWithPassword({
-      email: loginEmail,
-      password,
-    });
-
-    if (!loginResult.error && loginResult.data?.user?.id) {
-      const linkedCount = await claimMigratedChildren(loginResult.data.user.id, loginEmail);
-      await logMigrationAudit(
-        "login",
-        loginEmail,
-        { method: "password", linked_children: linkedCount },
-        loginResult.data.user.id
-      );
-      saveRememberedEmail(loginEmail);
-      setLoading(false);
-      return;
-    }
-
-    const signupResult = await supabase.auth.signUp({
-      email: loginEmail,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          squad_key: selectedSquad || squadKey || squadConfig?.key || null,
-        },
-      },
-    });
-
-    if (signupResult.error) {
-      await logMigrationAudit("auth_failed", loginEmail, {
-        login_error: loginResult.error?.message || null,
-        signup_error: signupResult.error.message,
-      });
-
-      setLoading(false);
-
-      const errorText = String(signupResult.error.message || "").toLowerCase();
-      if (errorText.includes("already") || errorText.includes("registered") || errorText.includes("exists")) {
-        setError(
-          "This email already has an account. Please use the password you created, or ask Elaine/SuperAdmin to reset it manually."
-        );
-      } else {
-        setError(signupResult.error.message);
-      }
-      return;
-    }
-
-    const userId = signupResult.data?.user?.id || null;
-    const linkedCount = await claimMigratedChildren(userId, loginEmail);
-
-    await logMigrationAudit(
-      "account_created",
-      loginEmail,
-      {
-        method: "create_or_continue",
-        linked_children: linkedCount,
-        needs_email_confirmation: !signupResult.data?.session,
-      },
-      userId
-    );
-
-    saveRememberedEmail(loginEmail);
-    setLoading(false);
-
-    if (signupResult.data?.session) {
-      return;
-    }
-
-    setMessage("Account created. Check your email if confirmation is required, then log in with the password you just chose.");
-    setMode("login");
-  }
-
   async function handleLogin(event) {
     event.preventDefault();
     setLoading(true);
@@ -278,6 +116,7 @@ export default function AuthPanel({
     setMessage("");
 
     const loginEmail = cleanEmail();
+    await writeAudit(supabase, "login_attempt", loginEmail, { mode: "login", squad_key: selectedSquad });
 
     const { data, error: loginError } = await supabase.auth.signInWithPassword({
       email: loginEmail,
@@ -287,14 +126,73 @@ export default function AuthPanel({
     setLoading(false);
 
     if (loginError) {
-      await logMigrationAudit("login_failed", loginEmail, { error: loginError.message });
+      await writeAudit(supabase, "login_failed", loginEmail, {
+        mode: "login",
+        squad_key: selectedSquad,
+        message: loginError.message,
+      });
       setError(loginError.message);
       return;
     }
 
-    const linkedCount = await claimMigratedChildren(data?.user?.id, loginEmail);
-    await logMigrationAudit("login", loginEmail, { method: "password", linked_children: linkedCount }, data?.user?.id);
     saveRememberedEmail(loginEmail);
+    await writeAudit(supabase, "login_success", loginEmail, { mode: "login", squad_key: selectedSquad }, data?.user?.id);
+  }
+
+  async function handleSignup(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    const signupEmail = cleanEmail();
+    await writeAudit(supabase, "create_password_attempt", signupEmail, {
+      mode: "signup",
+      squad_key: selectedSquad,
+    });
+
+    const loginFirst = await supabase.auth.signInWithPassword({
+      email: signupEmail,
+      password,
+    });
+
+    if (!loginFirst.error) {
+      saveRememberedEmail(signupEmail);
+      setLoading(false);
+      await writeAudit(supabase, "login_success_existing_account", signupEmail, {
+        mode: "signup_login_first",
+        squad_key: selectedSquad,
+      }, loginFirst.data?.user?.id);
+      return;
+    }
+
+    const { data, error: signupError } = await supabase.auth.signUp({
+      email: signupEmail,
+      password,
+      options: {
+        emailRedirectTo: APP_URL,
+      },
+    });
+
+    setLoading(false);
+
+    if (signupError) {
+      await writeAudit(supabase, "create_password_failed", signupEmail, {
+        mode: "signup",
+        squad_key: selectedSquad,
+        message: signupError.message,
+      });
+      setError(signupError.message);
+      return;
+    }
+
+    saveRememberedEmail(signupEmail);
+    await writeAudit(supabase, "create_password_success", signupEmail, {
+      mode: "signup",
+      squad_key: selectedSquad,
+    }, data?.user?.id);
+
+    setMessage("Password created. If you are not brought in automatically, use Log In with the same email and password.");
   }
 
   async function handleForgotPassword(event) {
@@ -311,22 +209,29 @@ export default function AuthPanel({
       return;
     }
 
+    await writeAudit(supabase, "forgot_password_requested", resetEmail, {
+      mode: "forgot",
+      squad_key: selectedSquad,
+    });
+
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       resetEmail,
       {
-        redirectTo: "https://fingallians-shared-platform.vercel.app/",
+        redirectTo: `${APP_URL}/?mode=reset`,
       }
     );
 
     setLoading(false);
 
     if (resetError) {
-      await logMigrationAudit("password_reset_failed", resetEmail, { error: resetError.message });
+      await writeAudit(supabase, "forgot_password_failed", resetEmail, {
+        message: resetError.message,
+        squad_key: selectedSquad,
+      });
       setError(resetError.message);
       return;
     }
 
-    await logMigrationAudit("password_reset_requested", resetEmail);
     setMessage("Password reset email sent. Check your inbox and spam folder.");
   }
 
@@ -348,7 +253,6 @@ export default function AuthPanel({
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
     const { error: updateError } = await supabase.auth.updateUser({
       password: resetPassword,
     });
@@ -356,72 +260,44 @@ export default function AuthPanel({
     setLoading(false);
 
     if (updateError) {
-      await logMigrationAudit("password_update_failed", userData?.user?.email || cleanEmail(), { error: updateError.message }, userData?.user?.id || null);
       setError(updateError.message);
       return;
     }
 
-    await logMigrationAudit("password_updated", userData?.user?.email || cleanEmail(), {}, userData?.user?.id || null);
-    setPassword(resetPassword);
+    setMessage("Password updated. You can now continue into the app.");
     setResetPassword("");
     setConfirmResetPassword("");
-    setRecoveryMode(false);
-    setMode("login");
-    setMessage("Password updated. You can now log in with your new password.");
-
-    if (window.location.hash || window.location.search.includes("type=recovery")) {
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
   }
 
   const chosenSquad = SQUADS.find(squad => squad.key === selectedSquad);
   const heading =
-    mode === "reset"
-      ? "Choose New Password"
-      : mode === "login"
-        ? "Log In"
-        : mode === "forgot"
-          ? "Reset Password"
-          : "Create Password";
-
-  const introText =
-    mode === "reset"
-      ? "Enter your new password from the reset link."
+    mode === "signup"
+      ? "Create Password"
       : mode === "forgot"
-        ? "Enter your email and we'll send a reset link."
-        : mode === "login"
-          ? "Log in with the password you created."
-          : "Existing parents: use the same email address and choose a password. New parents can do the same.";
+        ? "Reset Password"
+        : resetMode
+          ? "Choose New Password"
+          : "Log In";
 
   return (
     <main className="split-auth-screen">
-      {showMigrationPopup ? (
-        <div className="migration-auth-popup-backdrop">
-          <div className="migration-auth-popup">
+      {showMigrationNote && mode === "signup" ? (
+        <div className="migration-note-backdrop">
+          <div className="migration-note-modal">
             <button
               type="button"
-              className="migration-auth-popup-close"
-              onClick={() => setShowMigrationPopup(false)}
-              aria-label="Close"
+              className="migration-note-close"
+              onClick={() => setShowMigrationNote(false)}
             >
               ×
             </button>
-
-            <img src="/fingallians-crest.png" alt="Fingallians crest" />
-            <h2>Welcome to the updated app</h2>
+            <h2>Welcome to the new app 🎉</h2>
             <p>
-              We have moved everyone into one shared Fingallians Fitness Challenge app.
+              Please enter the same email address you used before, then add a
+              password. Your linked children, progress, runs, XP and badges should
+              still be there.
             </p>
-            <p>
-              Parents should enter the same email address used before, then choose a password.
-              Your linked children and progress should appear automatically.
-            </p>
-
-            <button
-              type="button"
-              className="button primary"
-              onClick={() => setShowMigrationPopup(false)}
-            >
+            <button className="button primary" onClick={() => setShowMigrationNote(false)}>
               Continue
             </button>
           </div>
@@ -437,7 +313,7 @@ export default function AuthPanel({
           <p className="split-auth-kicker">Fingallians</p>
           <h1>Fitness Challenge</h1>
           <p>
-            Select your squad, then continue with your parent email address.
+            Select your squad, then continue with your parent account.
           </p>
 
           {chosenSquad ? (
@@ -451,84 +327,88 @@ export default function AuthPanel({
         <div className="split-auth-panel">
           <div className="split-auth-panel-header">
             <h2>{heading}</h2>
-            <p>{introText}</p>
+            <p>
+              {mode === "signup"
+                ? "Use your same email address and choose a password."
+                : mode === "forgot"
+                  ? "Enter your email and we'll send a reset link."
+                  : resetMode
+                    ? "Enter your new password below."
+                    : "Log in with your email and password."}
+            </p>
           </div>
 
-          <div className="squad-button-grid">
-            {SQUADS.map(squad => (
-              <button
-                key={squad.key}
-                type="button"
-                className={
-                  selectedSquad === squad.key
-                    ? "squad-choice-button active"
-                    : "squad-choice-button"
-                }
-                onClick={() => chooseSquad(squad.key)}
-              >
-                {squad.label}
+          {!resetMode ? (
+            <div className="squad-button-grid">
+              {SQUADS.map(squad => (
+                <button
+                  key={squad.key}
+                  type="button"
+                  className={
+                    selectedSquad === squad.key
+                      ? "squad-choice-button active"
+                      : "squad-choice-button"
+                  }
+                  onClick={() => chooseSquad(squad.key)}
+                >
+                  {squad.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {resetMode ? (
+            <form className="split-auth-form" onSubmit={handleResetPassword}>
+              <label>New password</label>
+              <input
+                type="password"
+                value={resetPassword}
+                autoComplete="new-password"
+                onChange={event => setResetPassword(event.target.value)}
+                required
+                minLength={8}
+              />
+
+              <label>Confirm new password</label>
+              <input
+                type="password"
+                value={confirmResetPassword}
+                autoComplete="new-password"
+                onChange={event => setConfirmResetPassword(event.target.value)}
+                required
+                minLength={8}
+              />
+
+              {error ? <p className="split-form-error">{error}</p> : null}
+              {message ? <p className="split-form-message">{message}</p> : null}
+
+              <button className="split-auth-submit" disabled={loading}>
+                {loading ? "Saving…" : "Save New Password"}
               </button>
-            ))}
-          </div>
-
-          {selectedSquad ? (
+            </form>
+          ) : selectedSquad ? (
             <form
               className="split-auth-form"
               onSubmit={
-                mode === "reset"
-                  ? handleResetPassword
+                mode === "signup"
+                  ? handleSignup
                   : mode === "forgot"
                     ? handleForgotPassword
-                    : mode === "login"
-                      ? handleLogin
-                      : handleCreateOrContinue
+                    : handleLogin
               }
             >
-              {mode !== "reset" ? (
-                <>
-                  <label>Email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    autoComplete="email"
-                    onChange={event => setEmail(event.target.value)}
-                    required
-                  />
-                </>
-              ) : null}
+              <label>Email</label>
+              <input
+                type="email"
+                value={email}
+                autoComplete="email"
+                onChange={event => setEmail(event.target.value)}
+                required
+              />
 
-              {mode === "reset" ? (
+              {mode !== "forgot" ? (
                 <>
-                  <label>New password</label>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={resetPassword}
-                    autoComplete="new-password"
-                    onChange={event => setResetPassword(event.target.value)}
-                    required
-                  />
-
-                  <label>Confirm new password</label>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={confirmResetPassword}
-                    autoComplete="new-password"
-                    onChange={event => setConfirmResetPassword(event.target.value)}
-                    required
-                  />
-
-                  <label className="split-remember-row">
-                    <input
-                      type="checkbox"
-                      checked={showPassword}
-                      onChange={event => setShowPassword(event.target.checked)}
-                    />
-                    <span>Show password</span>
-                  </label>
-                </>
-              ) : mode !== "forgot" ? (
-                <>
-                  <label>Password</label>
+                  <label>{mode === "signup" ? "Add password" : "Password"}</label>
                   <div className="password-input-wrap">
                     <input
                       type={showPassword ? "text" : "password"}
@@ -538,6 +418,7 @@ export default function AuthPanel({
                       }
                       onChange={event => setPassword(event.target.value)}
                       required
+                      minLength={8}
                     />
 
                     <button
@@ -546,15 +427,7 @@ export default function AuthPanel({
                       onClick={() => setShowPassword(previous => !previous)}
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {showPassword ? (
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M2.3 4.3 4 2.6l17.7 17.7-1.7 1.7-3.1-3.1A11.7 11.7 0 0 1 12 20C6.5 20 2.2 15.9 1 12c.6-2 2-4 3.9-5.5L2.3 4.3Zm5.4 5.4a4.4 4.4 0 0 0 5.6 5.6l-1.9-1.9a1.8 1.8 0 0 1-1.8-1.8L7.7 9.7ZM12 4c5.5 0 9.8 4.1 11 8-.4 1.5-1.4 3-2.6 4.3l-3-3A4.5 4.5 0 0 0 10.7 6.6L8.6 4.5A11.7 11.7 0 0 1 12 4Z" />
-                        </svg>
-                      ) : (
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M12 4c5.5 0 9.8 4.1 11 8-1.2 3.9-5.5 8-11 8S2.2 15.9 1 12c1.2-3.9 5.5-8 11-8Zm0 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-2.6a2.4 2.4 0 1 1 0-4.8 2.4 2.4 0 0 1 0 4.8Z" />
-                        </svg>
-                      )}
+                      {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
 
@@ -575,13 +448,11 @@ export default function AuthPanel({
               <button className="split-auth-submit" disabled={loading}>
                 {loading
                   ? "Please wait…"
-                  : mode === "reset"
-                    ? "Save New Password"
+                  : mode === "signup"
+                    ? "Create Password / Continue"
                     : mode === "forgot"
                       ? "Send Reset Email"
-                      : mode === "login"
-                        ? "Log In"
-                        : "Create Password & Continue"}
+                      : "Log In"}
               </button>
             </form>
           ) : (
@@ -591,37 +462,25 @@ export default function AuthPanel({
             </div>
           )}
 
-          <div className="split-auth-links">
-            {mode === "reset" ? (
-              <button type="button" onClick={() => setMode("login")}>
-                Back to login
-              </button>
-            ) : mode === "signup" ? (
-              <>
+          {!resetMode ? (
+            <div className="split-auth-links">
+              {mode === "login" ? (
+                <>
+                  <button type="button" onClick={() => setMode("signup")}>
+                    Create password
+                  </button>
+
+                  <button type="button" onClick={() => setMode("forgot")}>
+                    Forgot password?
+                  </button>
+                </>
+              ) : (
                 <button type="button" onClick={() => setMode("login")}>
-                  I already created a password
+                  I already have a password
                 </button>
-
-                <button type="button" onClick={() => setMode("forgot")}>
-                  Forgot password?
-                </button>
-              </>
-            ) : mode === "login" ? (
-              <>
-                <button type="button" onClick={() => setMode("signup")}>
-                  Create password / account
-                </button>
-
-                <button type="button" onClick={() => setMode("forgot")}>
-                  Forgot password?
-                </button>
-              </>
-            ) : (
-              <button type="button" onClick={() => setMode("signup")}>
-                Back to create password
-              </button>
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </section>
     </main>
