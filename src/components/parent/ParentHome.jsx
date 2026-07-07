@@ -731,48 +731,115 @@ export default function ParentHome({
   }
 
   async function deleteManualRun(run) {
-    const playerId = run.playerId || run.player_id || selectedPlayer?.id;
-    const activityId = run.activityId || run.task_key;
+    const flowId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const playerId = run?.playerId || run?.player_id || selectedPlayer?.id;
+    const activityId = run?.activityId || run?.task_key;
+
+    console.groupCollapsed("[manual-run-delete]", flowId);
+    console.log("handler fired", { run, playerId, activityId });
 
     if (!playerId || !activityId) {
+      console.error("Missing playerId or activityId", { playerId, activityId, run });
+      console.groupEnd();
       alert("Could not identify the manual run to remove.");
       return;
     }
 
-    if (run.id) {
-      const { error } = await supabase
-        .from("run_proofs")
-        .delete()
-        .eq("id", run.id)
-        .eq("run_type", "manual");
+    const ok = window.confirm("Remove this manual run and uncheck the activity?");
 
-      if (error) {
-        alert(error.message);
-        return;
-      }
-    } else {
-      await supabase
+    if (!ok) {
+      console.log("cancelled by user");
+      console.groupEnd();
+      return;
+    }
+
+    const previousSavedRuns = savedRuns;
+    const previousCompletions = completions;
+
+    setSavedRuns(current =>
+      current.filter(item =>
+        run?.id
+          ? item.id !== run.id
+          : !(
+              item.player_id === playerId &&
+              item.task_key === activityId &&
+              item.run_type === "manual"
+            )
+      )
+    );
+
+    setCompletions(current =>
+      current.filter(item =>
+        !(
+          item.player_id === playerId &&
+          item.activity_id === activityId &&
+          item.gps_verified !== true
+        )
+      )
+    );
+
+    try {
+      let proofQuery = supabase
         .from("run_proofs")
         .delete()
         .eq("player_id", playerId)
         .eq("task_key", activityId)
-        .eq("run_type", "manual");
+        .eq("run_type", "manual")
+        .select("id,player_id,task_key,run_type");
+
+      if (run?.id) {
+        proofQuery = supabase
+          .from("run_proofs")
+          .delete()
+          .eq("id", run.id)
+          .eq("player_id", playerId)
+          .eq("task_key", activityId)
+          .eq("run_type", "manual")
+          .select("id,player_id,task_key,run_type");
+      }
+
+      const { data: deletedProofs, error: proofError } = await proofQuery;
+
+      if (proofError) throw proofError;
+
+      console.log("run_proofs deleted", deletedProofs);
+
+      const { data: deletedCompletions, error: completionError } = await supabase
+        .from("activity_completions")
+        .delete()
+        .eq("player_id", playerId)
+        .eq("activity_id", activityId)
+        .neq("gps_verified", true)
+        .select("id,player_id,activity_id,completion_type,gps_verified");
+
+      if (completionError) throw completionError;
+
+      console.log("activity_completions deleted", deletedCompletions);
+
+      const { data: deletedXp, error: xpError } = await supabase
+        .from("xp_transactions")
+        .delete()
+        .eq("player_id", playerId)
+        .eq("activity_id", activityId)
+        .select("id,player_id,activity_id,xp,source");
+
+      if (xpError) throw xpError;
+
+      console.log("xp_transactions deleted", deletedXp);
+
+      await refreshPlayerData(playerId);
+
+      console.log("refresh complete");
+    } catch (error) {
+      console.error("manual run delete failed", error);
+
+      setSavedRuns(previousSavedRuns);
+      setCompletions(previousCompletions);
+
+      alert(error?.message || "Could not remove this manual run.");
+    } finally {
+      console.groupEnd();
     }
-
-    const { error: completionError } = await supabase
-      .from("activity_completions")
-      .delete()
-      .eq("player_id", playerId)
-      .eq("activity_id", activityId)
-      .eq("completion_type", "manual");
-
-    if (completionError) {
-      alert(completionError.message);
-      return;
-    }
-
-    await removeXpForActivity(playerId, activityId);
-    await refreshPlayerData(playerId);
   }
 
   function openWeekFromProgress(week) {
