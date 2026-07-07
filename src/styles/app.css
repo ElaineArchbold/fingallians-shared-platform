@@ -12098,3 +12098,84 @@ button.migration-feed-row:hover {
   color: var(--text, #231f20);
   line-height: 1.4;
 }
+
+/* Audit Log + Admin My Children polish */
+.admin-my-child-linker {
+  margin-top: 14px;
+}
+
+.admin-my-child-row {
+  grid-template-columns: auto 1fr auto;
+}
+
+.admin-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.admin-row-actions .button {
+  width: auto;
+  min-width: 88px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.migration-filter-card,
+.migration-feed-row {
+  cursor: pointer;
+}
+
+.migration-filter-card.active {
+  border-color: var(--club-red);
+  background: rgba(197, 20, 23, .08);
+}
+
+.migration-card-action {
+  color: var(--club-red);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.migration-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.migration-clear-filter {
+  width: auto;
+  padding: 10px 14px;
+}
+
+.migration-filter-note {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.migration-event-code,
+.migration-detail-list code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 620px) {
+  .admin-my-child-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .admin-my-child-row .admin-row-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .admin-my-child-row .admin-row-actions .button {
+    flex: 1;
+  }
+}

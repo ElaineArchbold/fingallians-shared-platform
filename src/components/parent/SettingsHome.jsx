@@ -123,6 +123,26 @@ export default function SettingsHome({
     player => !addSquadKey || player.squad_key === addSquadKey
   );
 
+  async function writeSettingsAudit(event, details = {}) {
+    try {
+      await supabase.from("migration_audit").insert({
+        parent_email: session?.user?.email || null,
+        parent_user_id: session?.user?.id || null,
+        event,
+        details: {
+          squad_key: selectedPlayer?.squad_key || squadConfig?.key || null,
+          player_id: selectedPlayer?.id || null,
+          child_name: selectedPlayer?.name || null,
+          source: "settings",
+          path: window.location.pathname,
+          ...details,
+        },
+      });
+    } catch (auditError) {
+      console.error("Settings audit insert failed", auditError);
+    }
+  }
+
   function childLink() {
     if (!selectedPlayer?.child_access_token) return "";
 
@@ -213,6 +233,7 @@ export default function SettingsHome({
       return;
     }
 
+    await writeSettingsAudit("password_updated", { source: "settings" });
     setPasswordMessage("Password updated successfully.");
     setNewPassword("");
     setConfirmPassword("");
@@ -417,7 +438,10 @@ export default function SettingsHome({
           <button
             className="settings-row-button"
             type="button"
-            onClick={() => setShowTerms(true)}
+            onClick={() => {
+              setShowTerms(true);
+              writeSettingsAudit("terms_viewed", { source: "settings" });
+            }}
           >
             <span>📄 Terms and Conditions</span>
             <strong>View</strong>

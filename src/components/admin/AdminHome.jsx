@@ -16,11 +16,12 @@ const SQUADS = [
 
 const ADMIN_TABS = [
   { key: "overview", label: "Overview", icon: "📊" },
+  { key: "mychildren", label: "My Children", icon: "👨‍👩‍👧" },
   { key: "approvals", label: "Approvals", icon: "🔔" },
   { key: "players", label: "Players", icon: "👧" },
   { key: "plans", label: "Plans", icon: "🗓️" },
   { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
-  { key: "migration", label: "Migration", icon: "🧭", superAdminOnly: true },
+  { key: "migration", label: "Audit Log", icon: "🧾", superAdminOnly: true },
 ];
 
 function displaySquad(key) {
@@ -189,6 +190,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [termsRows, setTermsRows] = useState([]);
   const [migrationRows, setMigrationRows] = useState([]);
   const [migrationFilter, setMigrationFilter] = useState("all");
+  const [myChildIds, setMyChildIds] = useState([]);
+  const [myChildrenLoading, setMyChildrenLoading] = useState(false);
+  const [myChildSquadKey, setMyChildSquadKey] = useState("");
+  const [myChildPlayerId, setMyChildPlayerId] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailModal, setDetailModal] = useState(null);
   const [planWeek, setPlanWeek] = useState(1);
@@ -218,6 +223,15 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const filteredRuns = runs.filter(row => filteredIds.has(row.player_id));
   const filteredBadges = badges.filter(row => filteredIds.has(row.player_id));
   const filteredTerms = termsRows.filter(row => adminSquad === "all" || row.squad_key === adminSquad);
+
+  const myChildren = players
+    .filter(player => myChildIds.includes(player.id))
+    .sort((a, b) => `${a.squad_key}-${a.name}`.localeCompare(`${b.squad_key}-${b.name}`));
+
+  const myChildAvailablePlayers = players
+    .filter(player => !myChildIds.includes(player.id))
+    .filter(player => !myChildSquadKey || player.squad_key === myChildSquadKey)
+    .sort((a, b) => `${a.squad_key}-${a.name}`.localeCompare(`${b.squad_key}-${b.name}`));
 
   const filteredMigrationRows = isSuperAdmin
     ? migrationRows.filter(row => {
@@ -334,6 +348,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
   useEffect(() => {
     loadAdminData();
+    loadMyAdminChildren();
   }, []);
 
   useEffect(() => {
@@ -351,12 +366,129 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       .on("postgres_changes", { event: "*", schema: "public", table: "players" }, loadAdminData)
       .on("postgres_changes", { event: "*", schema: "public", table: "weekly_activities" }, loadAdminData)
       .on("postgres_changes", { event: "*", schema: "public", table: "migration_audit" }, loadAdminData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "parent_players" }, loadMyAdminChildren)
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  async function currentAdminUser() {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    return data?.user || null;
+  }
+
+  async function loadMyAdminChildren() {
+    setMyChildrenLoading(true);
+
+    const user = await currentAdminUser();
+
+    if (!user?.id) {
+      setMyChildIds([]);
+      setMyChildrenLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("parent_players")
+      .select("player_id")
+      .eq("user_id", user.id);
+
+    setMyChildrenLoading(false);
+
+    if (error) {
+      console.error(error);
+      setMyChildIds([]);
+      return;
+    }
+
+    setMyChildIds((data || []).map(row => row.player_id).filter(Boolean));
+  }
+
+  async function writeAdminAudit(event, details = {}, player = null) {
+    try {
+      const user = await currentAdminUser();
+
+      await supabase.from("migration_audit").insert({
+        parent_email: user?.email || null,
+        parent_user_id: user?.id || null,
+        event,
+        details: {
+          actor_role: isSuperAdmin ? "super_admin" : "admin",
+          admin_squad: adminSquad,
+          squad_key: player?.squad_key || details.squad_key || null,
+          player_id: player?.id || details.player_id || null,
+          player_name: player?.name || details.player_name || null,
+          source: "admin_dashboard",
+          path: window.location.pathname,
+          ...details,
+        },
+      });
+    } catch (auditError) {
+      console.error("Admin audit insert failed", auditError);
+    }
+  }
+
+  async function linkMyAdminChild() {
+    const player = players.find(item => item.id === myChildPlayerId);
+
+    if (!player) {
+      alert("Choose a child to link.");
+      return;
+    }
+
+    const user = await currentAdminUser();
+
+    if (!user?.id) {
+      alert("Could not find the logged-in admin account.");
+      return;
+    }
+
+    const { error } = await supabase.from("parent_players").insert({
+      user_id: user.id,
+      player_id: player.id,
+    });
+
+    if (error && !String(error.message || "").toLowerCase().includes("duplicate")) {
+      alert(error.message);
+      return;
+    }
+
+    setMyChildPlayerId("");
+    await loadMyAdminChildren();
+    await writeAdminAudit("admin_child_linked", { source: "admin_my_children" }, player);
+    showToast(`${player.name} linked to your admin account.`);
+  }
+
+  async function removeMyAdminChild(player) {
+    const user = await currentAdminUser();
+
+    if (!user?.id || !player?.id) return;
+
+    const ok = window.confirm(`Remove ${player.name} from your linked children?`);
+    if (!ok) return;
+
+    const { error } = await supabase
+      .from("parent_players")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("player_id", player.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await loadMyAdminChildren();
+    await writeAdminAudit("admin_child_removed", { source: "admin_my_children" }, player);
+    showToast(`${player.name} removed from your linked children.`);
+  }
 
   async function loadAdminData() {
     setLoading(true);
@@ -499,6 +631,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       return;
     }
 
+    await writeAdminAudit("admin_player_added", { player_name: name, squad_key: squadKey });
     showToast("Player added.");
     loadAdminData();
   }
@@ -514,6 +647,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       return;
     }
 
+    await writeAdminAudit("admin_player_removed", {}, player);
     showToast("Player removed.");
     setSelectedPlayer(null);
     loadAdminData();
@@ -541,6 +675,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       return;
     }
 
+    await writeAdminAudit("admin_points_adjusted", { xp, reason }, player);
     showToast(`${xp > 0 ? "Added" : "Removed"} ${Math.abs(xp)} points.`);
     loadAdminData();
   }
@@ -606,6 +741,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       }
     }
 
+    await writeAdminAudit("admin_approval_approved", { xp, completion_id: completion.id, activity_id: completion.activity_id, player_id: completion.player_id });
     showToast(`Approved${xp ? ` and awarded ${xp} XP` : ""}.`);
     await loadAdminData();
     return true;
@@ -640,6 +776,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       return;
     }
 
+    await writeAdminAudit("admin_approval_rejected", { completion_id: completion.id, activity_id: completion.activity_id, player_id: completion.player_id });
     showToast("Rejected.");
     await loadAdminData();
   }
@@ -668,6 +805,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       return;
     }
 
+    await writeAdminAudit("admin_plan_updated", { activity_id: activity.id, title: updates.title, squad_key: activity.squad_key });
     setEditingActivity(null);
     showToast("Plan updated.");
     await loadAdminData();
@@ -695,6 +833,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         .eq("activity_id", activity.id);
 
       await loadAdminData();
+      await writeAdminAudit("admin_activity_removed", { activity_id: activity.id }, player);
       showToast("Completion removed.");
       return true;
     }
@@ -746,6 +885,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     }
 
     await loadAdminData();
+    await writeAdminAudit("admin_activity_saved", { activity_id: activity.id, xp }, player);
     showToast(`Activity saved${xp ? ` (+${xp} XP)` : ""}.`);
     return true;
   }
@@ -1312,12 +1452,103 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
+  function renderMyChildren() {
+    return (
+      <div className="admin-panel">
+        <section className="admin-card">
+          <h2>My Children</h2>
+          <p className="muted">
+            Link your own child or children here so you can view them without using a separate parent login.
+            This does not give you extra access to other children; it only uses your own parent-child links.
+          </p>
+
+          <div className="settings-add-child admin-my-child-linker">
+            <label className="label">Squad</label>
+            <select
+              className="select"
+              value={myChildSquadKey}
+              onChange={event => {
+                setMyChildSquadKey(event.target.value);
+                setMyChildPlayerId("");
+              }}
+            >
+              <option value="">All squads</option>
+              {SQUADS.filter(item => item.key !== "all").map(item => (
+                <option key={item.key} value={item.key}>{item.label}</option>
+              ))}
+            </select>
+
+            <label className="label">Child</label>
+            <select
+              className="select"
+              value={myChildPlayerId}
+              onChange={event => setMyChildPlayerId(event.target.value)}
+            >
+              <option value="">Choose child</option>
+              {myChildAvailablePlayers.map(player => (
+                <option key={player.id} value={player.id}>
+                  {player.name} · {displaySquad(player.squad_key)}
+                </option>
+              ))}
+            </select>
+
+            <button className="button primary" type="button" onClick={linkMyAdminChild}>
+              Link Child to My Account
+            </button>
+          </div>
+        </section>
+
+        <section className="admin-card">
+          <h2>Linked Children</h2>
+
+          {myChildrenLoading ? (
+            <p className="muted">Loading linked children…</p>
+          ) : myChildren.length ? (
+            <div className="admin-player-list">
+              {myChildren.map(player => (
+                <div key={player.id} className="admin-player-row admin-my-child-row">
+                  <span>{initials(player.name)}</span>
+                  <div>
+                    <strong>{player.name}</strong>
+                    <small>{displaySquad(player.squad_key)}</small>
+                  </div>
+                  <div className="admin-row-actions">
+                    <button
+                      className="button primary"
+                      type="button"
+                      onClick={() => {
+                        setCoachPlayer(player);
+                        setCoachWeek(currentChallengeWeek);
+                        writeAdminAudit("admin_viewed_own_child", { source: "admin_my_children" }, player);
+                      }}
+                    >
+                      View
+                    </button>
+                    <button
+                      className="button secondary danger-button"
+                      type="button"
+                      onClick={() => removeMyAdminChild(player)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No children linked to your admin account yet.</p>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   function renderMigration() {
     if (!isSuperAdmin) {
       return (
         <div className="admin-panel">
           <section className="admin-card">
-            <h2>Migration Audit</h2>
+            <h2>Audit Log</h2>
             <p className="muted">This view is only available to SuperAdmin.</p>
           </section>
         </div>
@@ -1399,7 +1630,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         <section className="admin-card" ref={migrationListRef}>
           <div className="admin-section-title-row migration-title-row">
             <div>
-              <h2>Migration Audit Trail</h2>
+              <h2>Audit Log Trail</h2>
               <p className="muted">
                 SuperAdmin-only view of parent logins, account creation and child linking events from the new shared app.
               </p>
@@ -1456,7 +1687,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                 );
               })
             ) : (
-              <p className="muted">No migration audit events match this filter yet.</p>
+              <p className="muted">No audit events match this filter yet.</p>
             )}
           </div>
         </section>
@@ -1492,7 +1723,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
           <div className="admin-modal migration-list-modal" onClick={event => event.stopPropagation()}>
             <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
 
-            <h2>{detailModal.title || "Migration Log"}</h2>
+            <h2>{detailModal.title || "Audit Log"}</h2>
             <p className="muted">Full clickable audit log for this total. Click any row to see the exact event details.</p>
 
             <div className="admin-feed-list migration-feed-list migration-modal-feed-list">
@@ -1531,7 +1762,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                   );
                 })
               ) : (
-                <p className="muted">No migration audit events match this total yet.</p>
+                <p className="muted">No audit events match this total yet.</p>
               )}
             </div>
           </div>
@@ -1549,7 +1780,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
           <div className="admin-modal migration-detail-modal" onClick={event => event.stopPropagation()}>
             <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
 
-            <h2>Migration Event</h2>
+            <h2>Audit Event</h2>
 
             <div className="migration-detail-card">
               <span>
@@ -1563,7 +1794,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
               </span>
               <div>
                 <strong>{row.parent_email || "Unknown parent"}</strong>
-                <small>{row.event || "migration_event"} · {dateTime(row.created_at)}</small>
+                <small>{row.event || "audit_event"} · {dateTime(row.created_at)}</small>
               </div>
             </div>
 
@@ -1807,6 +2038,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
     await loadAdminData();
     setCoachRefreshKey(current => current + 1);
+    await writeAdminAudit("admin_run_removed", { run_id: run.id, activity_id: run.task_key, player_id: run.player_id, player_name: run.player_name, squad_key: run.squad_key });
     showToast("Run removed.");
     return true;
   }
@@ -1926,6 +2158,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     }
 
     await loadAdminData();
+    await writeAdminAudit("admin_run_saved", { activity_id: result.activityId, xp, run_type: result.type }, player);
     showToast(`Run saved${xp ? ` (+${xp} XP)` : ""}.`);
     return true;
   }
@@ -2141,6 +2374,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   function renderCurrentTab() {
     if (loading) return <div className="admin-card">Loading admin dashboard…</div>;
     if (activeTab === "overview") return renderOverview();
+    if (activeTab === "mychildren") return renderMyChildren();
     if (activeTab === "approvals") return renderApprovals();
     if (activeTab === "players") return renderPlayers();
     if (activeTab === "plans") return renderPlans();

@@ -491,6 +491,8 @@ export default function ParentHome({
 
     onSelectPlayer(player.id);
 
+    logMigrationAudit("child_selected", player, { stay_on_page: Boolean(options.stayOnPage) });
+
     if (player.squad_key && player.squad_key !== squadConfig.key) {
       onChangeSquad?.(player.squad_key);
     }
@@ -661,6 +663,10 @@ export default function ParentHome({
       }
 
       await refreshPlayerData(selectedPlayer.id);
+      await logMigrationAudit("activity_removed", selectedPlayer, {
+        activity_id: activity.id,
+        activity_title: activity.title,
+      });
       return;
     }
 
@@ -672,6 +678,10 @@ export default function ParentHome({
         completionType: "activity",
         gpsVerified: false,
         awardPoints: true,
+      });
+      await logMigrationAudit("activity_completed", selectedPlayer, {
+        activity_id: activity.id,
+        activity_title: activity.title,
       });
     } catch (error) {
       alert(error.message);
@@ -689,6 +699,11 @@ export default function ParentHome({
         completionType: type === "bonus" ? "bonus_approval" : "squad_approval",
         gpsVerified: false,
         awardPoints: false,
+      });
+      await logMigrationAudit("approval_submitted", selectedPlayer, {
+        activity_id: activity.id,
+        activity_title: activity.title,
+        approval_type: type,
       });
     } catch (error) {
       alert(error.message);
@@ -745,6 +760,14 @@ export default function ParentHome({
     if (proofError) {
       throw proofError;
     }
+
+    await logMigrationAudit(result.type === "gps" ? "gps_run_saved" : "manual_run_saved", selectedPlayer, {
+      activity_id: result.activityId,
+      activity_title: result.title,
+      distance_km: result.distanceKm,
+      duration_min: result.durationMin || null,
+      run_proof_id: proof?.id || null,
+    });
 
     await maybeAwardBadges(result.playerId);
     await refreshPlayerData(result.playerId);
@@ -899,6 +922,14 @@ export default function ParentHome({
       console.log("xp_transactions deleted", deletedXp);
 
       await refreshPlayerData(playerId);
+
+      await logMigrationAudit("manual_run_removed", selectedPlayer, {
+        activity_id: activityId,
+        run_proof_id: proofId || null,
+        deleted_proofs: deletedProofs.length,
+        deleted_completions: (deletedCompletions || []).length,
+        deleted_xp: (deletedXp || []).length,
+      });
 
       if (!deletedProofs.length) {
         console.warn("No run_proofs rows matched the delete query.", {
