@@ -581,6 +581,7 @@ export default function RunLoggerModal({
       cacheBust: true,
       pixelRatio: 2,
       backgroundColor: "#fffaf4",
+      skipFonts: true,
     });
 
     return new File(
@@ -678,29 +679,72 @@ export default function RunLoggerModal({
                 </p>
                 <p className="challenge-run-card-date">{formatDateTime(finishedRun.savedAt)}</p>
 
-                <div className="challenge-run-card-map">
-                  <svg viewBox="0 0 500 340" preserveAspectRatio="none">
-                    <rect className="route-card-bg" width="500" height="340" />
-                    <g className="route-card-grid">
-                      <path d="M0 68 H500 M0 136 H500 M0 204 H500 M0 272 H500" />
-                      <path d="M100 0 V340 M200 0 V340 M300 0 V340 M400 0 V340" />
+                <div
+                  className="challenge-run-card-map"
+                  style={{ backgroundColor: "#e8f6e9", border: "1px solid #d5ead7" }}
+                >
+                  <svg
+                    viewBox="0 0 500 340"
+                    preserveAspectRatio="none"
+                    style={{ display: "block", backgroundColor: "#e8f6e9" }}
+                  >
+                    <rect width="500" height="340" fill="#e8f6e9" />
+                    <g>
+                      <path
+                        d="M0 68 H500 M0 136 H500 M0 204 H500 M0 272 H500"
+                        fill="none"
+                        stroke="rgba(85, 140, 94, 0.18)"
+                        strokeWidth="1"
+                      />
+                      <path
+                        d="M100 0 V340 M200 0 V340 M300 0 V340 M400 0 V340"
+                        fill="none"
+                        stroke="rgba(85, 140, 94, 0.18)"
+                        strokeWidth="1"
+                      />
                     </g>
                     {finishedRun.type === "gps" ? (
                       <>
-                        <circle className="route-card-start" cx="70" cy="165" r="8" />
+                        <circle cx="70" cy="165" r="8" fill="#b01425" />
                         <path
-                          className="route-card-line"
                           d="M45 165 C92 205 125 252 190 238 C258 225 274 305 308 278 C335 254 300 164 338 158 C374 152 391 232 430 190 C468 148 423 62 465 46"
+                          fill="none"
+                          stroke="#b01425"
+                          strokeWidth="8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         />
-                        <text className="route-card-finish" x="438" y="188">🏁</text>
+                        <text x="438" y="188" fontSize="25">🏁</text>
                       </>
                     ) : (
                       <>
-                        <text className="route-card-manual-icon" x="250" y="150">📝</text>
-                        <text className="route-card-manual-title" x="250" y="196">
+                        <text
+                          x="250"
+                          y="150"
+                          fontSize="48"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                        >
+                          📝
+                        </text>
+                        <text
+                          x="250"
+                          y="196"
+                          fontSize="24"
+                          fontWeight="900"
+                          textAnchor="middle"
+                          fill="#351b20"
+                        >
                           Manual run entry
                         </text>
-                        <text className="route-card-manual-subtitle" x="250" y="224">
+                        <text
+                          x="250"
+                          y="224"
+                          fontSize="16"
+                          fontWeight="700"
+                          textAnchor="middle"
+                          fill="#7a6269"
+                        >
                           No GPS route recorded
                         </text>
                       </>
