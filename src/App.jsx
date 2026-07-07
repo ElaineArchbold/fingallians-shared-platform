@@ -54,10 +54,20 @@ function NavIcon({ name }) {
 
 function getChildLinkParams() {
   const params = new URLSearchParams(window.location.search);
+  const pathMatch = window.location.pathname.match(/^\/child\/([^/]+)$/);
+  const tokenFromPath = pathMatch?.[1] ? decodeURIComponent(pathMatch[1]) : "";
+  const tokenFromQuery = params.get("child") || "";
+  const storedToken = localStorage.getItem("childAccessToken") || "";
+
+  const childToken = tokenFromPath || tokenFromQuery || storedToken;
+
+  if (childToken) {
+    localStorage.setItem("childAccessToken", childToken);
+  }
 
   return {
-    childToken: params.get("child") || "",
-    squadFromUrl: params.get("squad") || "",
+    childToken,
+    squadFromUrl: params.get("squad") || localStorage.getItem("childSquadKey") || "",
   };
 }
 
@@ -154,6 +164,7 @@ export default function App() {
         </div>
 
         <ChildHome
+          key={childToken}
           supabase={supabase}
           squadConfig={squadConfig}
           childToken={childToken}

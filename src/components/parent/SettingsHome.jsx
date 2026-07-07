@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import TermsText from "../auth/TermsText";
 import { getSquadWhatsAppLink } from "../../lib/squadLinks";
 
 function initials(name = "") {
@@ -33,6 +32,7 @@ function formatAcceptedDate(value) {
 
 export default function SettingsHome({
   supabase,
+  session,
   squadConfig,
   selectedPlayer,
   players = [],
@@ -40,9 +40,8 @@ export default function SettingsHome({
   badges = [],
   termsAcceptedAt = "",
   onSwitchChild,
-  onSelectChild,
   onChildLinked,
-  onRemoveChild,
+  onSelectChild,
   onSignOut,
 }) {
   const [copyMessage, setCopyMessage] = useState("");
@@ -51,13 +50,8 @@ export default function SettingsHome({
   const [addSquadKey, setAddSquadKey] = useState("");
   const [addPlayerId, setAddPlayerId] = useState("");
   const [showTerms, setShowTerms] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordMessage, setPasswordMessage] = useState("");
-  const [passwordError, setPasswordError] = useState("");
 
   const whatsappLink = getSquadWhatsAppLink(squadConfig.key);
-  const hasMultipleChildren = players.length > 1;
 
   useEffect(() => {
     loadAllPlayers();
@@ -74,7 +68,19 @@ export default function SettingsHome({
   function childLink() {
     if (!selectedPlayer?.child_access_token) return "";
 
-    return `${window.location.origin}/?child=${selectedPlayer.child_access_token}&squad=${selectedPlayer.squad_key || squadConfig.key}`;
+    const token = encodeURIComponent(selectedPlayer.child_access_token);
+    return `${window.location.origin}/child/${token}`;
+  }
+
+  function openChildLink() {
+    const link = childLink();
+
+    if (!link) {
+      setCopyMessage("No child access token found for this player.");
+      return;
+    }
+
+    window.open(link, "_blank", "noopener,noreferrer");
   }
 
   async function loadAllPlayers() {
@@ -122,54 +128,14 @@ export default function SettingsHome({
     setAddPlayerId("");
   }
 
-  async function changePassword(event) {
-    event.preventDefault();
-    setPasswordMessage("");
-    setPasswordError("");
-
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters.");
-      return;
-    }
-
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
-    if (error) {
-      setPasswordError(error.message);
-      return;
-    }
-
-    setPasswordMessage("Password updated.");
-    setNewPassword("");
-    setTimeout(() => setShowPasswordModal(false), 900);
-  }
-
-  function confirmSignOut() {
-    onSignOut?.();
-  }
-
   return (
     <div className="page settings-home">
       <section className="player-card settings-player-card">
         <div className="player-avatar">{initials(selectedPlayer.name)}</div>
 
         <div className="player-card-main">
-          <div className="settings-player-title-row">
-            <h2>{selectedPlayer.name}</h2>
-
-            {hasMultipleChildren ? (
-              <button
-                className="child-name-switch"
-                onClick={onSwitchChild}
-                aria-label="Switch child"
-              >
-                ⌄
-              </button>
-            ) : null}
-          </div>
-
+          <p className="eyebrow">Settings</p>
+          <h2>{selectedPlayer.name}</h2>
           <p>{squadConfig.shortLabel}</p>
 
           <div className="player-xp-bar">
@@ -180,55 +146,45 @@ export default function SettingsHome({
             Level {levelFromXp(xpTotal)} · {xpTotal} XP · {badges.length} badges
           </small>
         </div>
+
+        <button className="button secondary settings-switch-button" onClick={onSwitchChild}>
+          Switch
+        </button>
       </section>
 
       <section className="settings-card">
         <h2>Children</h2>
 
         <div className="settings-card-content">
-          {players.length ? (
-            <div className="settings-child-button-list">
+          <div>
+            <strong>Selected child</strong>
+            <p className="muted">{selectedPlayer.name}</p>
+          </div>
+
+          {players.length > 1 ? (
+            <div className="settings-child-list">
               {players.map(player => (
-                <div
+                <button
                   key={player.id}
                   className={
                     player.id === selectedPlayer.id
-                      ? "settings-linked-child active"
-                      : "settings-linked-child"
+                      ? "settings-child-row active"
+                      : "settings-child-row"
                   }
+                  onClick={() => onSelectChild?.(player)}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSelectChild?.(player)}
-                  >
-                    <span>{initials(player.name)}</span>
-                    <div>
-                      <strong>{player.name}</strong>
-                      <small>{player.squad_key}</small>
-                    </div>
-                  </button>
-
-                  {player.id !== selectedPlayer.id ? (
-                    <button
-                      type="button"
-                      className="settings-remove-child"
-                      onClick={() => onRemoveChild?.(player)}
-                    >
-                      Remove
-                    </button>
-                  ) : (
-                    <em>Current</em>
-                  )}
-                </div>
+                  <span>{initials(player.name)}</span>
+                  <div>
+                    <strong>{player.name}</strong>
+                    <small>{player.squad_key}</small>
+                  </div>
+                </button>
               ))}
             </div>
           ) : null}
 
           <div className="settings-add-child">
             <strong>Add another child</strong>
-            <p className="muted">
-              Tap a child below to switch instantly. Add a child from any squad.
-            </p>
 
             <label className="label">Squad</label>
             <select
@@ -283,9 +239,19 @@ export default function SettingsHome({
             </p>
           </div>
 
-          <button className="button primary" onClick={copyChildLink}>
-            Copy Child Link
-          </button>
+          <div className="settings-action-row">
+            <button className="button primary" onClick={openChildLink}>
+              Open Child View
+            </button>
+
+            <button className="button secondary" onClick={copyChildLink}>
+              Copy Child Link
+            </button>
+          </div>
+
+          {childLink() ? (
+            <p className="settings-child-link-preview">{childLink()}</p>
+          ) : null}
 
           {copyMessage ? <p className="settings-message">{copyMessage}</p> : null}
         </div>
@@ -317,11 +283,7 @@ export default function SettingsHome({
         <h2>Account</h2>
 
         <div className="settings-card-content">
-          <button
-            className="settings-row-button"
-            type="button"
-            onClick={() => setShowPasswordModal(true)}
-          >
+          <button className="settings-row-button" type="button">
             <span>🔐 Change password</span>
             <strong>›</strong>
           </button>
@@ -347,46 +309,11 @@ export default function SettingsHome({
         <div className="settings-card-content">
           <p className="muted">Sign out of the parent app on this device.</p>
 
-          <button className="button secondary danger-button" onClick={confirmSignOut}>
+          <button className="button secondary danger-button" onClick={onSignOut}>
             Sign Out
           </button>
         </div>
       </section>
-
-      {showPasswordModal ? (
-        <div className="terms-modal-backdrop" onClick={() => setShowPasswordModal(false)}>
-          <form
-            className="password-modal"
-            onClick={event => event.stopPropagation()}
-            onSubmit={changePassword}
-          >
-            <button
-              type="button"
-              className="terms-modal-close"
-              onClick={() => setShowPasswordModal(false)}
-            >
-              ×
-            </button>
-
-            <h2>Change Password</h2>
-            <p className="muted">Enter a new password for your parent account.</p>
-
-            <label className="label">New password</label>
-            <input
-              className="input"
-              type="password"
-              value={newPassword}
-              onChange={event => setNewPassword(event.target.value)}
-              autoComplete="new-password"
-            />
-
-            {passwordError ? <p className="form-error">{passwordError}</p> : null}
-            {passwordMessage ? <p className="form-message">{passwordMessage}</p> : null}
-
-            <button className="button primary">Save Password</button>
-          </form>
-        </div>
-      ) : null}
 
       {showTerms ? (
         <div className="terms-modal-backdrop" onClick={() => setShowTerms(false)}>
@@ -399,10 +326,28 @@ export default function SettingsHome({
             </button>
 
             <div className="terms-readonly-card">
-              <TermsText />
-              <p className="settings-watermark terms-accepted-line">
-                Terms accepted: {formatAcceptedDate(termsAcceptedAt)}
+              <h2>Terms and Conditions</h2>
+              <p className="muted">
+                Accepted: {formatAcceptedDate(termsAcceptedAt)}
               </p>
+
+              <div className="terms-readonly-body">
+                <p>
+                  Parents/guardians are responsible for supervising children during
+                  the Fingallians Fitness Challenge.
+                </p>
+                <p>
+                  Children should only complete runs and activities in safe locations,
+                  with an adult where appropriate, and should avoid roads and unsafe areas.
+                </p>
+                <p>
+                  GPS runs, manual runs, skills, squad sessions and bonus activities
+                  are used for challenge tracking only.
+                </p>
+                <p>
+                  Coach approval may be required before some activities are awarded points.
+                </p>
+              </div>
             </div>
           </div>
         </div>

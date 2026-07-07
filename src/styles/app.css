@@ -10473,3 +10473,33 @@ body.is-child-link-mode .app-shell,
     align-items: flex-start;
   }
 }
+
+/* Child link permanent-token flow */
+.settings-child-link-preview {
+  word-break: break-all;
+  background: #fff8f8;
+  border: 1px solid #f0e1df;
+  border-radius: 14px;
+  padding: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.child-link-shell {
+  min-height: 100vh;
+  padding-bottom: 18px !important;
+}
+
+body.is-child-link-mode .bottom-nav,
+body:has(.child-link-shell) .bottom-nav {
+  display: none !important;
+}
+
+body.is-child-link-mode .app-shell {
+  padding-bottom: 18px !important;
+}
+
+.child-link-shell .topbar {
+  margin-bottom: 14px;
+}
