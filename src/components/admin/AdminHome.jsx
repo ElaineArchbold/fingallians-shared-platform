@@ -363,6 +363,34 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     return activities.find(activity => activity.id === id) || {};
   }
 
+  function playerRunsFor(player) {
+    if (!player?.id) return [];
+
+    return runs.filter(run => run.player_id === player.id);
+  }
+
+  function playerCompletionsFor(player) {
+    if (!player?.id) return [];
+
+    return completions.filter(row => row.player_id === player.id);
+  }
+
+  function playerXpFor(player) {
+    if (!player?.id) return 0;
+
+    return xpRows
+      .filter(row => row.player_id === player.id)
+      .reduce((sum, row) => sum + num(row.xp), 0);
+  }
+
+  function playerDistanceFor(player) {
+    return playerRunsFor(player).reduce((sum, run) => sum + num(run.distance_km), 0);
+  }
+
+  function playerCompletedCountFor(player) {
+    return playerCompletionsFor(player).filter(isApproved).length;
+  }
+
   async function addPlayer(formData) {
     const name = formData.get("name")?.toString().trim();
     const squadKey = formData.get("squad_key")?.toString();
@@ -477,6 +505,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       const { error: xpError } = await supabase.from("xp_transactions").insert({
         player_id: completion.player_id,
         activity_id: completion.activity_id,
+        activity_completion_id: completion.id,
         xp,
         reason: activity?.title || "Approved activity",
         source: completion.completion_type || "approval",
@@ -898,16 +927,17 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
           <div className="admin-player-list">
             {filteredPlayers.map(player => {
-              const playerXp = filteredXpRows
-                .filter(row => row.player_id === player.id)
-                .reduce((sum, row) => sum + num(row.xp), 0);
+              const playerXp = playerXpFor(player);
+              const playerDistance = playerDistanceFor(player);
 
               return (
                 <button key={player.id} className="admin-player-row" onClick={() => setSelectedPlayer(player)}>
                   <span>{initials(player.name)}</span>
                   <div>
                     <strong>{player.name}</strong>
-                    <small>{displaySquad(player.squad_key)} · {playerXp} XP</small>
+                    <small>
+                      {displaySquad(player.squad_key)} · {playerXp} XP · {playerDistance.toFixed(1)} km
+                    </small>
                   </div>
                   <em>Manage</em>
                 </button>
@@ -922,11 +952,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   }
 
   function renderPlayerDrawer(player) {
-    const playerRuns = runs.filter(run => run.player_id === player.id);
-    const playerCompletions = completions.filter(row => row.player_id === player.id);
-    const playerXp = xpRows
-      .filter(row => row.player_id === player.id)
-      .reduce((sum, row) => sum + num(row.xp), 0);
+    const playerRuns = playerRunsFor(player);
+    const playerCompletions = playerCompletionsFor(player);
+    const playerXp = playerXpFor(player);
+    const playerDistance = playerDistanceFor(player);
+    const playerCompleted = playerCompletedCountFor(player);
 
     return (
       <div className="admin-player-drawer">
@@ -939,6 +969,21 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
           <div>
             <h2>{player.name}</h2>
             <p>{displaySquad(player.squad_key)} · {playerXp} XP</p>
+          </div>
+        </div>
+
+        <div className="admin-player-mini-stats">
+          <div>
+            <strong>{playerCompleted}</strong>
+            <span>Completed</span>
+          </div>
+          <div>
+            <strong>{playerRuns.length}</strong>
+            <span>Runs</span>
+          </div>
+          <div>
+            <strong>{playerDistance.toFixed(1)} km</strong>
+            <span>Player Distance</span>
           </div>
         </div>
 
@@ -1241,17 +1286,14 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
     if (typeof detailModal === "object" && detailModal.type === "playerActivity") {
       const player = detailModal.player;
-      const playerCompletions = completions
-        .filter(row => row.player_id === player.id)
+      const playerCompletions = playerCompletionsFor(player)
         .sort((a, b) => new Date(b.completed_at || 0) - new Date(a.completed_at || 0));
 
-      const playerRuns = runs
-        .filter(row => row.player_id === player.id)
+      const playerRuns = playerRunsFor(player)
         .sort((a, b) => new Date(b.saved_at || 0) - new Date(a.saved_at || 0));
 
-      const playerXp = xpRows
-        .filter(row => row.player_id === player.id)
-        .reduce((sum, row) => sum + num(row.xp), 0);
+      const playerXp = playerXpFor(player);
+      const playerDistance = playerDistanceFor(player);
 
       return (
         <div className="admin-modal-backdrop" onClick={() => setDetailModal(null)}>
@@ -1271,7 +1313,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                 <span>Runs</span>
               </div>
               <div>
-                <strong>{playerRuns.reduce((sum, run) => sum + num(run.distance_km), 0).toFixed(1)} km</strong>
+                <strong>{playerDistance.toFixed(1)} km</strong>
                 <span>Distance</span>
               </div>
             </div>
@@ -1379,6 +1421,73 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
+  async function adminDeleteRun(run) {
+    if (!run?.id) return false;
+
+    const ok = window.confirm(`Remove ${run.label || "this run"} for ${run.player_name || "this player"}?`);
+    if (!ok) return false;
+
+    const { error: runError } = await supabase
+      .from("run_proofs")
+      .delete()
+      .eq("id", run.id);
+
+    if (runError) {
+      alert(runError.message);
+      return false;
+    }
+
+    if (run.player_id && run.task_key) {
+      await supabase
+        .from("activity_completions")
+        .delete()
+        .eq("player_id", run.player_id)
+        .eq("activity_id", run.task_key)
+        .in("completion_type", ["manual", "gps"]);
+
+      await supabase
+        .from("xp_transactions")
+        .delete()
+        .eq("player_id", run.player_id)
+        .eq("activity_id", run.task_key);
+    }
+
+    await loadAdminData();
+    setCoachRefreshKey(current => current + 1);
+    showToast("Run removed.");
+    return true;
+  }
+
+  async function adminUnapproveCompletion(completion) {
+    if (!completion?.id) return false;
+
+    const ok = window.confirm("Move this approval back to Awaiting Approval and remove its XP?");
+    if (!ok) return false;
+
+    const { error: updateError } = await supabase
+      .from("activity_completions")
+      .update({
+        status: "awaiting_approval",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", completion.id);
+
+    if (updateError) {
+      alert(updateError.message);
+      return false;
+    }
+
+    await supabase
+      .from("xp_transactions")
+      .delete()
+      .eq("player_id", completion.player_id)
+      .eq("activity_id", completion.activity_id);
+
+    await loadAdminData();
+    showToast("Moved back to awaiting approval.");
+    return true;
+  }
+
   async function adminHandleRunSaved(result, player) {
     if (!player?.id) return false;
 
@@ -1417,7 +1526,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       player_id: player.id,
       player_name: player.name,
       task_key: result.activityId,
-      week: 1,
+      week: result.week || currentChallengeWeek,
       label: result.title,
       target: result.targetKm ? `${result.targetKm} km` : null,
       run_type: result.type,
@@ -1428,9 +1537,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
           ? Number((result.durationMin / result.distanceKm).toFixed(2))
           : null,
       note: result.type === "gps" ? "Verified GPS run added by admin" : "Manual run entry added by admin",
+      route_points: result.type === "gps" ? result.routePoints || [] : null,
       saved_at: result.savedAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      has_screenshot: false,
+      has_screenshot: result.type === "gps" && Array.isArray(result.routePoints) && result.routePoints.length > 0,
       share_image_url: null,
     });
 
@@ -1611,11 +1721,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   function renderCoachMode() {
     if (!coachPlayer) return null;
 
-    const playerCompletions = completions.filter(row => row.player_id === coachPlayer.id);
-    const playerRuns = runs.filter(row => row.player_id === coachPlayer.id);
-    const playerXp = xpRows
-      .filter(row => row.player_id === coachPlayer.id)
-      .reduce((sum, row) => sum + num(row.xp), 0);
+    const playerCompletions = playerCompletionsFor(coachPlayer);
+    const playerRuns = playerRunsFor(coachPlayer);
+    const playerXp = playerXpFor(coachPlayer);
     const playerBadges = badges.filter(row => row.player_id === coachPlayer.id);
     const playerActivities = activities.filter(
       activity => activity.squad_key === coachPlayer.squad_key
@@ -1640,6 +1748,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
             activities={playerActivities}
             completions={playerCompletions}
             runs={playerRuns}
+            playerDistanceKm={playerRuns.reduce((sum, run) => sum + num(run.distance_km), 0)}
             xpTotal={playerXp}
             badges={playerBadges}
             onChangeWeek={setCoachWeek}

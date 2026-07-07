@@ -310,9 +310,7 @@ export default function ParentHome({
       return;
     }
 
-    const totals = new Map();
-
-    ids.forEach(id => totals.set(id, 0));
+    const totals = new Map(ids.map(id => [id, 0]));
 
     (xpRows || []).forEach(row => {
       totals.set(row.player_id, (totals.get(row.player_id) || 0) + Number(row.xp || 0));
@@ -327,16 +325,15 @@ export default function ParentHome({
 
     const index = ranked.findIndex(item => item.id === player.id);
 
-    if (index < 0) {
-      setSquadRank(null);
-      return;
-    }
-
-    setSquadRank({
-      position: index + 1,
-      total: ranked.length,
-      xp: ranked[index].xp,
-    });
+    setSquadRank(
+      index >= 0
+        ? {
+            position: index + 1,
+            total: ranked.length,
+            xp: ranked[index].xp,
+          }
+        : null
+    );
   }
 
   async function loadBadges(playerId) {
@@ -678,6 +675,7 @@ export default function ParentHome({
         id: result.activityId,
         title: result.title,
         activity_key: "fitness",
+        target_unit: "km",
       };
 
     const completion = await upsertCompletion({
@@ -923,7 +921,7 @@ export default function ParentHome({
         </div>
       ) : null}
 
-<ChallengeHome
+      <ChallengeHome
         supabase={supabase}
         squadConfig={squadConfig}
         selectedPlayer={selectedPlayer}

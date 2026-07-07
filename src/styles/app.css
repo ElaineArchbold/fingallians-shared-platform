@@ -10080,3 +10080,169 @@ button[aria-label="Settings"] {
 .home-leaderboard-position-card b {
   color: var(--club-red);
 }
+
+
+/* Home / child squad leaderboard position */
+.home-leaderboard-position-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .22), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fff8e8);
+  border: 1px solid rgba(247, 201, 72, .38);
+  box-shadow: 0 12px 30px rgba(72, 30, 18, .08);
+}
+
+.home-leaderboard-position-card > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #fff2d1;
+  font-size: 28px;
+}
+
+.home-leaderboard-position-card strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: .95;
+  text-transform: uppercase;
+}
+
+.home-leaderboard-position-card p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-weight: 900;
+}
+
+.home-leaderboard-position-card b {
+  color: var(--club-red);
+}
+
+
+/* Admin player drawer: player-only totals */
+.admin-player-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.admin-player-mini-stats div {
+  background: #fff8f8;
+  border: 1px solid #f0e1df;
+  border-radius: 16px;
+  padding: 12px;
+  text-align: center;
+}
+
+.admin-player-mini-stats strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+}
+
+.admin-player-mini-stats span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+@media (max-width: 520px) {
+  .admin-player-mini-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shared leaderboard position card */
+.home-leaderboard-position-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(247, 201, 72, .22), transparent 34%),
+    linear-gradient(135deg, #ffffff, #fff8e8);
+  border: 1px solid rgba(247, 201, 72, .38);
+  box-shadow: 0 12px 30px rgba(72, 30, 18, .08);
+}
+
+.home-leaderboard-position-card > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #fff2d1;
+  font-size: 28px;
+}
+
+.home-leaderboard-position-card strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+  line-height: .95;
+  text-transform: uppercase;
+}
+
+.home-leaderboard-position-card p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-weight: 900;
+}
+
+.home-leaderboard-position-card b {
+  color: var(--club-red);
+}
+
+/* Admin player drawer: player-only totals */
+.admin-player-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.admin-player-mini-stats div {
+  background: #fff8f8;
+  border: 1px solid #f0e1df;
+  border-radius: 16px;
+  padding: 12px;
+  text-align: center;
+}
+
+.admin-player-mini-stats strong {
+  display: block;
+  color: var(--club-red);
+  font-family: var(--font-heading);
+  font-size: 22px;
+}
+
+.admin-player-mini-stats span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+@media (max-width: 520px) {
+  .admin-player-mini-stats {
+    grid-template-columns: 1fr;
+  }
+}
