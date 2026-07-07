@@ -19,6 +19,7 @@ const ADMIN_TABS = [
   { key: "approvals", label: "Approvals", icon: "🔔" },
   { key: "players", label: "Players", icon: "👧" },
   { key: "plans", label: "Plans", icon: "🗓️" },
+  { key: "migration", label: "Migration", icon: "🧭", superAdminOnly: true },
   { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
 ];
 
@@ -186,6 +187,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [badges, setBadges] = useState([]);
   const [activities, setActivities] = useState([]);
   const [termsRows, setTermsRows] = useState([]);
+  const [migrationRows, setMigrationRows] = useState([]);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailModal, setDetailModal] = useState(null);
   const [planWeek, setPlanWeek] = useState(1);
@@ -214,6 +216,25 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const filteredRuns = runs.filter(row => filteredIds.has(row.player_id));
   const filteredBadges = badges.filter(row => filteredIds.has(row.player_id));
   const filteredTerms = termsRows.filter(row => adminSquad === "all" || row.squad_key === adminSquad);
+
+  const filteredMigrationRows = isSuperAdmin
+    ? migrationRows.filter(row => {
+        const detailsSquad = row?.details?.squad_key || row?.details?.selected_squad || row?.details?.squadKey;
+        return adminSquad === "all" || !detailsSquad || detailsSquad === adminSquad;
+      })
+    : [];
+
+  const migratedParentEmails = new Set(
+    filteredMigrationRows
+      .filter(row => ["login", "account_created", "password_created", "parent_migrated"].includes(row.event))
+      .map(row => String(row.parent_email || "").toLowerCase())
+      .filter(Boolean)
+  );
+
+  const migrationTodayCount = filteredMigrationRows.filter(row => {
+    if (!row.created_at) return false;
+    return new Date(row.created_at).toDateString() === new Date().toDateString();
+  }).length;
 
   const activePlayerIds = new Set([
     ...filteredCompletions.map(row => row.player_id),
@@ -304,6 +325,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       .on("postgres_changes", { event: "*", schema: "public", table: "xp_transactions" }, loadAdminData)
       .on("postgres_changes", { event: "*", schema: "public", table: "players" }, loadAdminData)
       .on("postgres_changes", { event: "*", schema: "public", table: "weekly_activities" }, loadAdminData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "migration_audit" }, loadAdminData)
       .subscribe();
 
     return () => {
@@ -322,6 +344,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       badgeResult,
       activityResult,
       termsResult,
+      migrationResult,
     ] = await Promise.all([
       supabase.from("players").select("*").order("squad_key").order("name"),
       supabase.from("activity_completions").select("*").order("completed_at", { ascending: false }),
@@ -330,6 +353,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       supabase.from("player_badges").select("*").order("earned_at", { ascending: false }),
       supabase.from("weekly_activities").select("*").order("week_number").order("section"),
       supabase.from("terms_acceptances").select("*").order("accepted_at", { ascending: false }),
+      isSuperAdmin
+        ? supabase.from("migration_audit").select("*").order("created_at", { ascending: false }).limit(250)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (playerResult.error) console.error(playerResult.error);
@@ -339,6 +365,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (badgeResult.error) console.error(badgeResult.error);
     if (activityResult.error) console.error(activityResult.error);
     if (termsResult.error) console.error(termsResult.error);
+    if (migrationResult.error) console.error(migrationResult.error);
 
     setPlayers(playerResult.data || []);
     setCompletions(completionResult.data || []);
@@ -347,6 +374,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     setBadges(badgeResult.data || []);
     setActivities(activityResult.data || []);
     setTermsRows(termsResult.data || []);
+    setMigrationRows(migrationResult.data || []);
     setLoading(false);
   }
 
@@ -1259,6 +1287,107 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
+  function renderMigration() {
+    if (!isSuperAdmin) {
+      return (
+        <div className="admin-panel">
+          <section className="admin-card">
+            <h2>Migration Audit</h2>
+            <p className="muted">This view is only available to SuperAdmin.</p>
+          </section>
+        </div>
+      );
+    }
+
+    const loginCount = filteredMigrationRows.filter(row => row.event === "login").length;
+    const accountCount = filteredMigrationRows.filter(row => ["account_created", "password_created"].includes(row.event)).length;
+    const childLinkCount = filteredMigrationRows.filter(row => row.event === "child_linked").length;
+
+    return (
+      <div className="admin-panel">
+        <div className="admin-stat-grid">
+          <button className="admin-stat-card">
+            <span>👨‍👩‍👧</span>
+            <strong>{migratedParentEmails.size}</strong>
+            <small>Parents seen</small>
+          </button>
+
+          <button className="admin-stat-card">
+            <span>🔐</span>
+            <strong>{accountCount}</strong>
+            <small>Accounts created</small>
+          </button>
+
+          <button className="admin-stat-card">
+            <span>✅</span>
+            <strong>{loginCount}</strong>
+            <small>Logins</small>
+          </button>
+
+          <button className="admin-stat-card">
+            <span>🔗</span>
+            <strong>{childLinkCount}</strong>
+            <small>Child links</small>
+          </button>
+
+          <button className="admin-stat-card">
+            <span>📅</span>
+            <strong>{migrationTodayCount}</strong>
+            <small>Events today</small>
+          </button>
+
+          <button className="admin-stat-card">
+            <span>🧾</span>
+            <strong>{filteredMigrationRows.length}</strong>
+            <small>Total events</small>
+          </button>
+        </div>
+
+        <section className="admin-card">
+          <h2>Migration Audit Trail</h2>
+          <p className="muted">
+            SuperAdmin-only view of parent logins, account creation and child linking events from the new shared app.
+          </p>
+
+          <div className="admin-feed-list">
+            {filteredMigrationRows.length ? (
+              filteredMigrationRows.slice(0, 120).map(row => {
+                const details = row.details || {};
+                const squad = details.squad_key || details.selected_squad || details.squadKey || "all squads";
+                const childName = details.child_name || details.player_name || "";
+
+                return (
+                  <div className="admin-feed-row" key={row.id}>
+                    <span>
+                      {row.event === "login"
+                        ? "✅"
+                        : row.event === "account_created" || row.event === "password_created"
+                          ? "🔐"
+                          : row.event === "child_linked"
+                            ? "🔗"
+                            : "🧭"}
+                    </span>
+                    <div>
+                      <strong>{row.parent_email || "Unknown parent"}</strong>
+                      <small>
+                        {row.event}
+                        {childName ? ` · ${childName}` : ""}
+                        {squad ? ` · ${squad}` : ""}
+                      </small>
+                    </div>
+                    <em>{dateTime(row.created_at)}</em>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="muted">No migration audit events have been logged yet.</p>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   function renderSettings() {
     return (
       <div className="admin-panel">
@@ -1827,6 +1956,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (activeTab === "approvals") return renderApprovals();
     if (activeTab === "players") return renderPlayers();
     if (activeTab === "plans") return renderPlans();
+    if (activeTab === "migration") return renderMigration();
     if (activeTab === "leaderboard") return renderLeaderboard();
     return renderOverview();
   }
@@ -1873,7 +2003,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       </section>
 
       <nav className="admin-tabs">
-        {ADMIN_TABS.map(tab => (
+        {ADMIN_TABS.filter(tab => !tab.superAdminOnly || isSuperAdmin).map(tab => (
           <button
             key={tab.key}
             className={activeTab === tab.key ? "active" : ""}

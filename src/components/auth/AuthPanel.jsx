@@ -41,6 +41,25 @@ export default function AuthPanel({
     }
   }, [squadKey]);
 
+  async function logMigrationAudit(event, parentEmail, parentUserId = null, extraDetails = {}) {
+    try {
+      await supabase.from("migration_audit").insert({
+        parent_email: parentEmail || null,
+        parent_user_id: parentUserId || null,
+        event,
+        details: {
+          squad_key: selectedSquad || squadKey || squadConfig?.key || null,
+          app_url: window.location.origin,
+          path: window.location.pathname,
+          user_agent: navigator.userAgent,
+          ...extraDetails,
+        },
+      });
+    } catch (auditError) {
+      console.error("Migration audit insert failed", auditError);
+    }
+  }
+
   function chooseSquad(key) {
     setSelectedSquad(key);
     onSelectSquad?.(key);
@@ -71,7 +90,7 @@ export default function AuthPanel({
 
     const loginEmail = cleanEmail();
 
-    const { error: loginError } = await supabase.auth.signInWithPassword({
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password,
     });
@@ -84,6 +103,9 @@ export default function AuthPanel({
     }
 
     saveRememberedEmail(loginEmail);
+    await logMigrationAudit("login", loginEmail, data?.user?.id || null, {
+      login_method: "password",
+    });
   }
 
   async function handleSignup(event) {
@@ -94,7 +116,7 @@ export default function AuthPanel({
 
     const signupEmail = cleanEmail();
 
-    const { error: signupError } = await supabase.auth.signUp({
+    const { data, error: signupError } = await supabase.auth.signUp({
       email: signupEmail,
       password,
       options: {
@@ -110,6 +132,11 @@ export default function AuthPanel({
     }
 
     saveRememberedEmail(signupEmail);
+    await logMigrationAudit("account_created", signupEmail, data?.user?.id || null, {
+      signup_method: "password",
+      email_confirmation_required: !data?.session,
+    });
+
     setMode("login");
     setMessage("Account created. Check your email if confirmation is required, then log in.");
   }
@@ -141,6 +168,10 @@ export default function AuthPanel({
       setError(resetError.message);
       return;
     }
+
+    await logMigrationAudit("password_reset_requested", resetEmail, null, {
+      reset_method: "email",
+    });
 
     setMessage("Password reset email sent. Check your inbox.");
   }

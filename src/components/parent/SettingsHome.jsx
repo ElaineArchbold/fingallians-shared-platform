@@ -42,6 +42,7 @@ export default function SettingsHome({
   onSwitchChild,
   onChildLinked,
   onSelectChild,
+  onRemoveChild,
   onSignOut,
 }) {
   const [copyMessage, setCopyMessage] = useState("");
@@ -161,24 +162,57 @@ export default function SettingsHome({
             <p className="muted">{selectedPlayer.name}</p>
           </div>
 
-          {players.length > 1 ? (
+          {players.length ? (
             <div className="settings-child-list">
               {players.map(player => (
-                <button
+                <div
                   key={player.id}
                   className={
                     player.id === selectedPlayer.id
                       ? "settings-child-row active"
                       : "settings-child-row"
                   }
-                  onClick={() => onSelectChild?.(player)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
                 >
-                  <span>{initials(player.name)}</span>
-                  <div>
-                    <strong>{player.name}</strong>
-                    <small>{player.squad_key}</small>
-                  </div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectChild?.(player)}
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      minWidth: 0,
+                      border: 0,
+                      background: "transparent",
+                      color: "inherit",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    <span>{initials(player.name)}</span>
+                    <div>
+                      <strong>{player.name}</strong>
+                      <small>{player.squad_key}</small>
+                    </div>
+                  </button>
+
+                  {players.length > 1 ? (
+                    <button
+                      type="button"
+                      className="button secondary danger-button"
+                      onClick={() => onRemoveChild?.(player)}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
               ))}
             </div>
           ) : null}

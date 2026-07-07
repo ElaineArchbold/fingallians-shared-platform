@@ -502,6 +502,28 @@ export default function ParentHome({
     }
   }
 
+
+  async function logMigrationAudit(event, player = null, extraDetails = {}) {
+    try {
+      await supabase.from("migration_audit").insert({
+        parent_email: session?.user?.email || null,
+        parent_user_id: session?.user?.id || null,
+        event,
+        details: {
+          squad_key: player?.squad_key || squadConfig?.key || null,
+          child_name: player?.name || null,
+          player_id: player?.id || null,
+          app_url: window.location.origin,
+          path: window.location.pathname,
+          user_agent: navigator.userAgent,
+          ...extraDetails,
+        },
+      });
+    } catch (auditError) {
+      console.error("Migration audit insert failed", auditError);
+    }
+  }
+
   async function removeLinkedChild(player) {
     if (!session?.user?.id || !player?.id) return;
 
@@ -523,6 +545,8 @@ export default function ParentHome({
       alert(error.message);
       return;
     }
+
+    await logMigrationAudit("child_removed", player);
 
     setAllLinkedPlayers(previous => previous.filter(item => item.id !== player.id));
     setLocalPlayers(previous => previous.filter(item => item.id !== player.id));
@@ -552,6 +576,8 @@ export default function ParentHome({
     }
 
     await loadAllLinkedPlayers();
+    await logMigrationAudit("child_linked", player);
+
     setLocalPlayers(previous => {
       if (previous.some(item => item.id === player.id)) return previous;
       return [...previous, player];
