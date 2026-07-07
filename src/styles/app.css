@@ -11921,3 +11921,180 @@ button.migration-feed-row:hover {
   transform: none !important;
   color: var(--club-red-dark) !important;
 }
+
+/* =====================================================
+   QUICK FIXES - auth migration note, squad back action,
+   and settings child remove layout
+===================================================== */
+
+/* The migration note should live inside the login card, not float outside it. */
+.migration-note-backdrop,
+.migration-note-modal {
+  display: none !important;
+}
+
+.migration-inline-note {
+  width: 100%;
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #fff8e8;
+  border: 2px solid var(--fg-gold, #f7c948);
+  box-shadow: 0 8px 22px rgba(120, 8, 18, .08);
+}
+
+.migration-inline-note strong {
+  display: block;
+  color: var(--fg-red-2, #a80d19);
+  font-family: var(--font-heading);
+  font-size: 18px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.migration-inline-note p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.split-auth-change-squad,
+.auth-small-back-button {
+  border: 0;
+  background: transparent;
+  color: var(--club-red);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.split-auth-selected .split-auth-change-squad {
+  margin-top: 10px;
+  padding: 0;
+  color: var(--fg-gold, #f7c948);
+  text-decoration: underline;
+}
+
+.auth-small-back-button {
+  justify-self: center;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+}
+
+/* Keep the Remove action inside the child row on desktop and mobile. */
+.settings-linked-child {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  overflow: hidden;
+}
+
+.settings-linked-child > button:first-child {
+  min-width: 0;
+}
+
+.settings-linked-child > button:first-child > div {
+  min-width: 0;
+}
+
+.settings-linked-child strong,
+.settings-linked-child small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-remove-child {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--club-red) !important;
+  border-radius: 0 !important;
+  padding: 6px 0 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  cursor: pointer;
+  justify-self: end !important;
+  white-space: nowrap;
+}
+
+.settings-remove-child:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .settings-linked-child {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .settings-remove-child {
+    justify-self: end !important;
+  }
+}
+
+
+/* Migration first-login modal */
+.migration-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: rgba(15, 23, 42, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.migration-modal-card {
+  width: min(460px, 100%);
+  background: #ffffff;
+  border-radius: 26px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+  border: 4px solid var(--fg-gold, #f7c948);
+}
+
+.migration-modal-card img {
+  width: 86px;
+  height: 86px;
+  object-fit: contain;
+  background: #fff;
+  border: 4px solid var(--fg-gold, #f7c948);
+  border-radius: 999px;
+  padding: 6px;
+  margin-bottom: 12px;
+}
+
+.migration-modal-card h2 {
+  margin: 0;
+  color: var(--club-red, #c51417);
+  font-family: var(--font-heading, inherit);
+  text-transform: uppercase;
+  font-size: 28px;
+}
+
+.migration-modal-card p {
+  margin: 12px 0 0;
+  color: var(--text-secondary, #6f6768);
+  line-height: 1.5;
+  font-weight: 700;
+}
+
+.migration-modal-note {
+  margin: 18px 0;
+  background: #fff8ef;
+  border: 1px solid rgba(247, 201, 72, 0.55);
+  border-radius: 18px;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+
+.migration-modal-note strong {
+  color: var(--club-red, #c51417);
+  font-weight: 900;
+}
+
+.migration-modal-note span {
+  color: var(--text, #231f20);
+  line-height: 1.4;
+}

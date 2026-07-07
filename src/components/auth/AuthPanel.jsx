@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 const REMEMBER_EMAIL_KEY = "fingalliansRememberedEmail";
 const KEEP_LOGGED_IN_KEY = "fingalliansKeepLoggedIn";
+const MIGRATION_MODAL_SEEN_KEY = "fingalliansMigrationModalSeen";
 
 const SQUADS = [
   { key: "2014-boys", label: "2014 Boys" },
@@ -53,24 +54,27 @@ export default function AuthPanel({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [showMigrationNote, setShowMigrationNote] = useState(true);
   const [resetMode, setResetMode] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
   const [confirmResetPassword, setConfirmResetPassword] = useState("");
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlMode = params.get("mode");
+    const cameFromOldApp = Boolean(params.get("from_app"));
 
     if (urlMode === "signup" || urlMode === "create") {
       setMode("signup");
-      setShowMigrationNote(true);
     }
 
-    if (window.location.hash.includes("type=recovery") || params.get("type") === "recovery") {
+    if ((cameFromOldApp || urlMode === "signup" || urlMode === "create") && !localStorage.getItem(MIGRATION_MODAL_SEEN_KEY)) {
+      setShowMigrationModal(true);
+    }
+
+    if (window.location.hash.includes("type=recovery") || params.get("type") === "recovery" || urlMode === "reset") {
       setResetMode(true);
       setMode("reset");
-      setShowMigrationNote(false);
     }
 
     const rememberedEmail = localStorage.getItem(REMEMBER_EMAIL_KEY);
@@ -95,6 +99,14 @@ export default function AuthPanel({
     setMessage("");
   }
 
+  function clearSquad() {
+    setSelectedSquad("");
+    onSelectSquad?.("");
+    localStorage.removeItem("lastSquadKey");
+    setError("");
+    setMessage("");
+  }
+
   function cleanEmail() {
     return email.trim().toLowerCase();
   }
@@ -107,6 +119,11 @@ export default function AuthPanel({
       localStorage.removeItem(REMEMBER_EMAIL_KEY);
       localStorage.removeItem(KEEP_LOGGED_IN_KEY);
     }
+  }
+
+  function closeMigrationModal() {
+    localStorage.setItem(MIGRATION_MODAL_SEEN_KEY, "true");
+    setShowMigrationModal(false);
   }
 
   async function handleLogin(event) {
@@ -281,29 +298,29 @@ export default function AuthPanel({
 
   return (
     <main className="split-auth-screen">
-      {showMigrationNote && mode === "signup" ? (
-        <div className="migration-note-backdrop">
-          <div className="migration-note-modal">
-            <button
-              type="button"
-              className="migration-note-close"
-              onClick={() => setShowMigrationNote(false)}
-            >
-              ×
-            </button>
-            <h2>Welcome to the new app 🎉</h2>
+      {showMigrationModal ? (
+        <div className="migration-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="migration-modal-card">
+            <img src="/fingallians-crest.png" alt="Fingallians crest" />
+
+            <h2>Welcome to the updated app</h2>
+
             <p>
-              Please enter the same email address you used before, then add a
-              password. Your linked children, progress, runs, XP and badges should
-              still be there.
+              We have moved everyone to one shared Fingallians Fitness Challenge app.
             </p>
-            <button className="button primary" onClick={() => setShowMigrationNote(false)}>
-              Continue
+
+            <div className="migration-modal-note">
+              <strong>What to do now</strong>
+              <span>Enter the same email address you used before, then add a password.</span>
+              <span>Your children, progress, runs, XP and badges should still be there.</span>
+            </div>
+
+            <button type="button" className="split-auth-submit" onClick={closeMigrationModal}>
+              Continue to create password
             </button>
           </div>
         </div>
       ) : null}
-
       <section className="split-auth-card">
         <div className="split-auth-brand">
           <div className="split-auth-crest">
@@ -320,6 +337,9 @@ export default function AuthPanel({
             <div className="split-auth-selected">
               <span>Selected Squad</span>
               <strong>{chosenSquad.label}</strong>
+              <button type="button" className="split-auth-change-squad" onClick={clearSquad}>
+                Change squad
+              </button>
             </div>
           ) : null}
         </div>
@@ -339,22 +359,30 @@ export default function AuthPanel({
           </div>
 
           {!resetMode ? (
-            <div className="squad-button-grid">
-              {SQUADS.map(squad => (
-                <button
-                  key={squad.key}
-                  type="button"
-                  className={
-                    selectedSquad === squad.key
-                      ? "squad-choice-button active"
-                      : "squad-choice-button"
-                  }
-                  onClick={() => chooseSquad(squad.key)}
-                >
-                  {squad.label}
+            <>
+              <div className="squad-button-grid">
+                {SQUADS.map(squad => (
+                  <button
+                    key={squad.key}
+                    type="button"
+                    className={
+                      selectedSquad === squad.key
+                        ? "squad-choice-button active"
+                        : "squad-choice-button"
+                    }
+                    onClick={() => chooseSquad(squad.key)}
+                  >
+                    {squad.label}
+                  </button>
+                ))}
+              </div>
+
+              {selectedSquad ? (
+                <button type="button" className="auth-small-back-button" onClick={clearSquad}>
+                  Pick a different squad
                 </button>
-              ))}
-            </div>
+              ) : null}
+            </>
           ) : null}
 
           {resetMode ? (
@@ -472,6 +500,16 @@ export default function AuthPanel({
 
                   <button type="button" onClick={() => setMode("forgot")}>
                     Forgot password?
+                  </button>
+                </>
+              ) : mode === "forgot" ? (
+                <>
+                  <button type="button" onClick={() => setMode("signup")}>
+                    Create password
+                  </button>
+
+                  <button type="button" onClick={() => setMode("login")}>
+                    Back to login
                   </button>
                 </>
               ) : (

@@ -291,21 +291,19 @@ export default function SettingsHome({
                     </div>
                   </button>
 
-                  {player.id !== selectedPlayer.id ? (
-                    <button
-                      type="button"
-                      className="settings-remove-child"
-                      onClick={() => {
-                        const ok = window.confirm(
-                          `Remove ${player.name} from this parent account?`
-                        );
+                  <button
+                    type="button"
+                    className="settings-remove-child"
+                    onClick={() => {
+                      const ok = window.confirm(
+                        `Remove ${player.name} from this parent account?`
+                      );
 
-                        if (ok) onRemoveChild?.(player);
-                      }}
-                    >
-                      Remove
-                    </button>
-                  ) : null}
+                      if (ok) onRemoveChild?.(player);
+                    }}
+                  >
+                    Remove
+                  </button>
                 </div>
               ))}
             </div>
