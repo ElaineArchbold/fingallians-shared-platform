@@ -241,7 +241,7 @@ export default function SettingsHome({
                 onClick={onSwitchChild}
                 aria-label="Switch child"
               >
-                ›
+                ⌄
               </button>
             ) : null}
           </div>

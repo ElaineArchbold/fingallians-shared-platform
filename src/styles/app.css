@@ -11843,379 +11843,81 @@ button.migration-feed-row:hover,
   font-size: 12px !important;
 }
 
+
 /* =====================================================
-   Final fixes: settings remove link, migration clickability, auth popup
+   FINAL: SuperAdmin migration audit + settings V chevron
 ===================================================== */
 
-.settings-child-box {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  gap: 10px !important;
-  background: #fff8f8 !important;
-  border: 1px solid #f0e1df !important;
-  border-radius: 16px !important;
-  padding: 10px 12px !important;
-}
-
-.settings-child-box.active {
-  border-color: var(--club-red) !important;
-  background: rgba(197, 20, 23, .08) !important;
-}
-
-.settings-child-main {
-  min-width: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) !important;
-  gap: 10px !important;
-  align-items: center !important;
-  text-align: left !important;
-  cursor: pointer !important;
-}
-
-.settings-remove-child-link {
-  width: auto !important;
-  min-width: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  color: var(--club-red) !important;
-  padding: 4px 0 4px 8px !important;
-  margin: 0 !important;
-  font-size: 12px !important;
-  font-weight: 900 !important;
-  line-height: 1 !important;
-  text-decoration: underline !important;
-  cursor: pointer !important;
-  justify-self: end !important;
-  box-shadow: none !important;
-}
-
-.settings-remove-child-link:hover {
-  color: var(--club-red-dark) !important;
-  transform: none !important;
-}
-
-@media (max-width: 520px) {
-  .settings-child-box {
-    grid-template-columns: minmax(0, 1fr) auto !important;
-  }
-
-  .settings-remove-child-link {
-    justify-self: end !important;
-  }
-}
-
 .admin-tabs {
-  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)) !important;
 }
 
 .admin-tabs button {
   min-width: 0 !important;
 }
 
-.admin-tabs small {
-  white-space: nowrap !important;
-}
-
-.migration-filter-card,
-.migration-feed-row,
-.migration-card-action {
-  cursor: pointer !important;
-}
-
-.migration-filter-card {
-  position: relative !important;
-}
-
-.migration-filter-card.active,
-.migration-filter-card:hover {
-  border-color: var(--club-red) !important;
-  background: linear-gradient(135deg, #fff7f7, #ffffff) !important;
-}
-
-.migration-card-action {
-  display: block !important;
-  color: var(--club-red) !important;
-  font-size: 12px !important;
-  font-style: normal !important;
-  font-weight: 900 !important;
-  margin-top: 4px !important;
-}
-
-.migration-feed-row {
-  width: 100% !important;
-  border: 1px solid #f0e1df !important;
-}
-
-.migration-feed-row:hover {
-  border-color: var(--club-red) !important;
-  background: #fff4f4 !important;
-}
-
-.migration-auth-popup-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 20000;
-  background: rgba(15, 23, 42, .72);
-  display: grid;
-  place-items: center;
-  padding: 18px;
-}
-
-.migration-auth-popup {
-  width: min(460px, 100%);
-  background: white;
-  border-radius: 24px;
-  padding: 22px;
-  text-align: center;
-  position: relative;
-  box-shadow: var(--shadow-lg);
-}
-
-.migration-auth-popup img {
-  width: 82px;
-  height: 82px;
-  object-fit: contain;
-  margin-bottom: 10px;
-}
-
-.migration-auth-popup h2 {
-  margin: 0 30px 10px;
-  color: var(--club-red);
-  font-family: var(--font-heading);
-  text-transform: uppercase;
-}
-
-.migration-auth-popup p {
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.migration-auth-popup-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  border: 0;
-  background: #f8e8eb;
-  color: #a51022;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  font-size: 22px;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-/* Add these at the bottom of App.css */
-
-.settings-player-card .settings-switch-button {
-  display: none !important;
-}
-
-.settings-player-title-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.admin-tabs button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   max-width: 100%;
 }
 
-.settings-player-title-row h2 {
-  margin: 0;
+.migration-stat-grid .migration-filter-card,
+.migration-filter-card,
+button.migration-feed-row {
+  cursor: pointer !important;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.migration-stat-grid .migration-filter-card:hover,
+.migration-filter-card:hover,
+button.migration-feed-row:hover {
+  border-color: var(--club-red) !important;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md) !important;
+}
+
+.migration-card-action {
+  display: block;
+  margin-top: 6px;
+  color: var(--club-red);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.migration-feed-row {
+  width: 100%;
+  text-align: left;
 }
 
 .child-name-switch {
-  border: 0;
-  background: transparent !important;
-  color: inherit !important;
-  font-size: 24px !important;
+  font-size: 21px !important;
+  line-height: 1 !important;
   font-weight: 900 !important;
-  line-height: 1;
-  padding: 0 3px;
-  cursor: pointer;
-}
-
-.settings-child-button-list {
-  display: grid;
-  gap: 10px;
-}
-
-.settings-linked-child {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-  background: #fff8f8;
-  border: 1px solid #f0e1df;
-  border-radius: 16px;
-  padding: 10px 12px;
-}
-
-.settings-linked-child.active {
-  border-color: var(--club-red);
-  background: rgba(197, 20, 23, .08);
-}
-
-.settings-linked-child > button:first-child {
-  border: 0;
-  background: transparent;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  align-items: center;
-  text-align: left;
-  padding: 0;
-  cursor: pointer;
-}
-
-.settings-linked-child span {
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  background: var(--club-red);
-  color: white;
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-}
-
-.settings-linked-child strong {
-  display: block;
-  color: var(--text);
-}
-
-.settings-linked-child small {
-  display: block;
-  color: var(--text-secondary);
-}
-
-.settings-linked-child em {
-  font-style: normal;
-  color: #16843d;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
+  transform: translateY(-2px) !important;
 }
 
 .settings-remove-child {
-  border: 0;
-  background: transparent;
-  color: var(--club-red);
-  font-size: 12px;
-  font-weight: 900;
-  padding: 4px 0 4px 8px;
-  cursor: pointer;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--club-red) !important;
+  padding: 4px 2px !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
   text-decoration: underline;
+  text-underline-offset: 3px;
+  width: auto !important;
+  min-width: 0 !important;
   justify-self: end;
 }
 
-.password-modal {
-  width: min(460px, 100%);
-  background: white;
-  border-radius: 24px;
-  padding: 18px;
-  position: relative;
-  box-shadow: var(--shadow-lg);
-  display: grid;
-  gap: 10px;
-}
-
-.password-modal h2 {
-  margin: 0 42px 0 0;
-  font-family: var(--font-heading);
-  color: var(--club-red);
-  text-transform: uppercase;
-}
-
-.terms-copy h2 {
-  margin: 0 44px 14px 0;
-  color: var(--club-red);
-  font-family: var(--font-heading);
-  text-transform: uppercase;
-}
-
-.terms-copy h3 {
-  margin: 18px 0 6px;
-  color: var(--text);
-  font-family: var(--font-heading);
-  text-transform: uppercase;
-  font-size: 17px;
-}
-
-.terms-copy p {
-  margin: 0;
-  color: var(--text);
-  line-height: 1.55;
-}
-
-.terms-accepted-line {
-  margin-top: 18px;
-  text-align: left;
-}
-
-.migration-note-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: grid;
-  place-items: center;
-  background: rgba(15, 23, 42, .72);
-  padding: 16px;
-}
-
-.migration-note-modal {
-  width: min(480px, 100%);
-  background: white;
-  border-radius: 24px;
-  padding: 22px;
-  text-align: center;
-  position: relative;
-  box-shadow: var(--shadow-lg);
-  border: 4px solid var(--club-gold);
-}
-
-.migration-note-modal h2 {
-  margin: 0 36px 10px;
-  color: var(--club-red);
-  font-family: var(--font-heading);
-  text-transform: uppercase;
-}
-
-.migration-note-modal p {
-  color: var(--text-secondary);
-  line-height: 1.55;
-  font-weight: 700;
-}
-
-.migration-note-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  border: 0;
-  background: #f8e8eb;
-  color: #a51022;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  font-size: 22px;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.password-eye-button {
-  min-width: 54px;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-@media (max-width: 520px) {
-  .settings-linked-child {
-    grid-template-columns: 1fr auto;
-  }
-
-  .settings-remove-child {
-    justify-self: end;
-  }
+.settings-remove-child:hover {
+  background: transparent !important;
+  transform: none !important;
+  color: var(--club-red-dark) !important;
 }

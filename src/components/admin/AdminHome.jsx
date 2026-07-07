@@ -1381,7 +1381,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
               }
               onClick={() => {
                 setMigrationFilter(card.key);
-                setDetailModal({ type: "migrationList", filter: card.key });
+                setDetailModal({
+                  type: "migrationList",
+                  filter: card.key,
+                  title: `${card.label} Audit Log`,
+                });
               }}
             >
               <span>{card.icon}</span>
@@ -1489,7 +1493,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
             <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
 
             <h2>{detailModal.title || "Migration Log"}</h2>
-            <p className="muted">Full log for this migration total. Click any row to see the event details.</p>
+            <p className="muted">Full clickable audit log for this total. Click any row to see the exact event details.</p>
 
             <div className="admin-feed-list migration-feed-list migration-modal-feed-list">
               {rows.length ? (
@@ -2187,7 +2191,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       </section>
 
       <nav className="admin-tabs">
-        {ADMIN_TABS.filter(tab => !tab.superAdminOnly || isSuperAdmin).map(tab => (
+        {ADMIN_TABS
+          .filter(tab => !tab.superAdminOnly || isSuperAdmin)
+          .sort((a, b) => (a.key === "migration" ? 1 : 0) - (b.key === "migration" ? 1 : 0))
+          .map(tab => (
           <button
             key={tab.key}
             className={activeTab === tab.key ? "active" : ""}
