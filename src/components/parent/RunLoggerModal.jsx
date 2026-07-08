@@ -223,6 +223,10 @@ export default function RunLoggerModal({
   const latestPoint = points[points.length - 1] || null;
   const route = useMemo(() => points.map(point => [point.lat, point.lng]), [points]);
   const pace = paceFromSeconds(elapsed, distanceKm);
+  const screenshotMapSrc = useMemo(
+    () => buildScreenshotMapDataUrl(finishedRun),
+    [finishedRun]
+  );
 
 
   useEffect(() => {
@@ -676,9 +680,6 @@ export default function RunLoggerModal({
   async function removeFinishedManualRun() {
     if (!finishedRun || finishedRun.type !== "manual") return;
 
-    const ok = window.confirm("Remove this manual run entry?");
-    if (!ok) return;
-
     setDeleting(true);
 
     try {
@@ -796,7 +797,7 @@ export default function RunLoggerModal({
           <button className="modal-close-button" onClick={onClose}>×</button>
 
           <div className="saved-run-header">
-            <h2>RUN COMPLETE</h2>
+            <h2>Great job, run complete!</h2>
             <p>{finishedRun.type === "gps" ? "GPS verified" : "Manual entry"}</p>
           </div>
 
@@ -824,93 +825,17 @@ export default function RunLoggerModal({
                     overflow: "hidden",
                   }}
                 >
-                <svg
-  viewBox="0 0 500 340"
-  width="100%"
-  height="100%"
-  xmlns="http://www.w3.org/2000/svg"
->
-  <rect width="500" height="340" fill="#e8f6e9" />
-
-  <path
-    d="M0 68 H500 M0 136 H500 M0 204 H500 M0 272 H500"
-    fill="none"
-    stroke="rgba(85,140,94,0.18)"
-    strokeWidth="1"
-  />
-
-  <path
-    d="M100 0 V340 M200 0 V340 M300 0 V340 M400 0 V340"
-    fill="none"
-    stroke="rgba(85,140,94,0.18)"
-    strokeWidth="1"
-  />
-
-  {finishedRun.type === "gps" && buildRouteSvgPath(finishedRun.routePoints || []) ? (
-    <>
-      <path
-        d={buildRouteSvgPath(finishedRun.routePoints || []).path}
-        fill="none"
-        stroke="#b01425"
-        strokeWidth="8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      <circle
-        cx={buildRouteSvgPath(finishedRun.routePoints || []).start.x}
-        cy={buildRouteSvgPath(finishedRun.routePoints || []).start.y}
-        r="8"
-        fill="#16843d"
-      />
-
-      <circle
-        cx={buildRouteSvgPath(finishedRun.routePoints || []).finish.x}
-        cy={buildRouteSvgPath(finishedRun.routePoints || []).finish.y}
-        r="10"
-        fill="#b01425"
-      />
-
-      <text
-        x={Math.min(476, Math.max(24, buildRouteSvgPath(finishedRun.routePoints || []).finish.x + 16))}
-        y={Math.min(316, Math.max(24, buildRouteSvgPath(finishedRun.routePoints || []).finish.y + 8))}
-        fontSize="25"
-      >
-        🏁
-      </text>
-    </>
-  ) : (
-    <>
-      <text x="250" y="145" fontSize="48" textAnchor="middle">
-        {finishedRun.type === "gps" ? "🏃" : "📝"}
-      </text>
-
-      <text
-        x="250"
-        y="195"
-        fontSize="24"
-        fontWeight="900"
-        textAnchor="middle"
-        fill="#351b20"
-      >
-        {finishedRun.type === "gps" ? "GPS run saved" : "Manual run entry"}
-      </text>
-
-      <text
-        x="250"
-        y="224"
-        fontSize="16"
-        fontWeight="700"
-        textAnchor="middle"
-        fill="#7a6269"
-      >
-        {finishedRun.type === "gps"
-          ? "Route points were not available"
-          : "No GPS route recorded"}
-      </text>
-    </>
-  )}
-</svg>
+                  <img
+                    src={screenshotMapSrc}
+                    alt="Run route map"
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      backgroundColor: "#e8f6e9",
+                    }}
+                  />
                 </div>
 
                 <div className="challenge-run-card-stats">

@@ -627,8 +627,7 @@ export default function ChildHome({
           selectedPlayer={player}
           onClose={() => setRunActivity(null)}
           onSaved={async result => {
-            await handleRunSaved(result);
-            setRunActivity(null);
+            return await handleRunSaved(result);
           }}
           onDeleted={deleteManualRun}
         />
