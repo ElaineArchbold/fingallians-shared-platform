@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 const REMEMBER_EMAIL_KEY = "fingalliansRememberedEmail";
 const KEEP_LOGGED_IN_KEY = "fingalliansKeepLoggedIn";
 const MIGRATION_MODAL_SEEN_KEY = "fingalliansMigrationModalSeen";
+const REDIRECT_ARRIVAL_LOGGED_KEY = "fingalliansRedirectArrivalLogged";
 
 const SQUADS = [
   { key: "2014-boys", label: "2014 Boys" },
@@ -13,12 +14,27 @@ const SQUADS = [
 
 const APP_URL = "https://fingallians-shared-platform.vercel.app";
 
-function getFromApp() {
+function getUrlParams() {
   try {
-    return new URLSearchParams(window.location.search).get("from_app") || "direct";
+    return new URLSearchParams(window.location.search);
   } catch {
-    return "direct";
+    return new URLSearchParams();
   }
+}
+
+function getFromApp() {
+  const params = getUrlParams();
+  return params.get("from_app") || params.get("from") || "direct";
+}
+
+function auditBaseDetails(details = {}) {
+  return {
+    from_app: getFromApp(),
+    url: window.location.href,
+    path: window.location.pathname,
+    user_agent: navigator.userAgent,
+    ...details,
+  };
 }
 
 async function writeAudit(supabase, event, email, details = {}, parentUserId = null) {
@@ -27,12 +43,7 @@ async function writeAudit(supabase, event, email, details = {}, parentUserId = n
       parent_email: email || null,
       parent_user_id: parentUserId || null,
       event,
-      details: {
-        from_app: getFromApp(),
-        url: window.location.href,
-        user_agent: navigator.userAgent,
-        ...details,
-      },
+      details: auditBaseDetails(details),
     });
   } catch (error) {
     console.warn("migration audit failed", error);
@@ -60,9 +71,10 @@ export default function AuthPanel({
   const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = getUrlParams();
     const urlMode = params.get("mode");
-    const cameFromOldApp = Boolean(params.get("from_app"));
+    const sourceApp = getFromApp();
+    const cameFromOldApp = sourceApp !== "direct";
 
     if (urlMode === "signup" || urlMode === "create") {
       setMode("signup");
@@ -70,6 +82,18 @@ export default function AuthPanel({
 
     if ((cameFromOldApp || urlMode === "signup" || urlMode === "create") && !localStorage.getItem(MIGRATION_MODAL_SEEN_KEY)) {
       setShowMigrationModal(true);
+    }
+
+    if (cameFromOldApp) {
+      const arrivalKey = `${REDIRECT_ARRIVAL_LOGGED_KEY}:${sourceApp}`;
+
+      if (!sessionStorage.getItem(arrivalKey)) {
+        sessionStorage.setItem(arrivalKey, "true");
+        writeAudit(supabase, "redirect_arrived", null, {
+          source_app: sourceApp,
+          mode: urlMode || "signup",
+        });
+      }
     }
 
     if (window.location.hash.includes("type=recovery") || params.get("type") === "recovery" || urlMode === "reset") {
@@ -83,7 +107,7 @@ export default function AuthPanel({
       setEmail(rememberedEmail);
       setRememberMe(true);
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     if (squadKey) {
@@ -133,7 +157,13 @@ export default function AuthPanel({
     setMessage("");
 
     const loginEmail = cleanEmail();
-    await writeAudit(supabase, "login_attempt", loginEmail, { mode: "login", squad_key: selectedSquad });
+    const sourceApp = getFromApp();
+
+    await writeAudit(supabase, "login_attempt", loginEmail, {
+      mode: "login",
+      squad_key: selectedSquad,
+      source_app: sourceApp,
+    });
 
     const { data, error: loginError } = await supabase.auth.signInWithPassword({
       email: loginEmail,
@@ -146,6 +176,7 @@ export default function AuthPanel({
       await writeAudit(supabase, "login_failed", loginEmail, {
         mode: "login",
         squad_key: selectedSquad,
+        source_app: sourceApp,
         message: loginError.message,
       });
       setError(loginError.message);
@@ -153,7 +184,11 @@ export default function AuthPanel({
     }
 
     saveRememberedEmail(loginEmail);
-    await writeAudit(supabase, "login_success", loginEmail, { mode: "login", squad_key: selectedSquad }, data?.user?.id);
+    await writeAudit(supabase, "login", loginEmail, {
+      mode: "login",
+      squad_key: selectedSquad,
+      source_app: sourceApp,
+    }, data?.user?.id);
   }
 
   async function handleSignup(event) {
@@ -163,9 +198,12 @@ export default function AuthPanel({
     setMessage("");
 
     const signupEmail = cleanEmail();
+    const sourceApp = getFromApp();
+
     await writeAudit(supabase, "create_password_attempt", signupEmail, {
       mode: "signup",
       squad_key: selectedSquad,
+      source_app: sourceApp,
     });
 
     const loginFirst = await supabase.auth.signInWithPassword({
@@ -176,9 +214,11 @@ export default function AuthPanel({
     if (!loginFirst.error) {
       saveRememberedEmail(signupEmail);
       setLoading(false);
-      await writeAudit(supabase, "login_success_existing_account", signupEmail, {
+      await writeAudit(supabase, "login", signupEmail, {
         mode: "signup_login_first",
         squad_key: selectedSquad,
+        source_app: sourceApp,
+        account_already_existed: true,
       }, loginFirst.data?.user?.id);
       return;
     }
@@ -197,6 +237,7 @@ export default function AuthPanel({
       await writeAudit(supabase, "create_password_failed", signupEmail, {
         mode: "signup",
         squad_key: selectedSquad,
+        source_app: sourceApp,
         message: signupError.message,
       });
       setError(signupError.message);
@@ -204,9 +245,10 @@ export default function AuthPanel({
     }
 
     saveRememberedEmail(signupEmail);
-    await writeAudit(supabase, "create_password_success", signupEmail, {
+    await writeAudit(supabase, "account_created", signupEmail, {
       mode: "signup",
       squad_key: selectedSquad,
+      source_app: sourceApp,
     }, data?.user?.id);
 
     setMessage("Password created. If you are not brought in automatically, use Log In with the same email and password.");
@@ -219,6 +261,7 @@ export default function AuthPanel({
     setMessage("");
 
     const resetEmail = cleanEmail();
+    const sourceApp = getFromApp();
 
     if (!resetEmail) {
       setLoading(false);
@@ -229,6 +272,7 @@ export default function AuthPanel({
     await writeAudit(supabase, "forgot_password_requested", resetEmail, {
       mode: "forgot",
       squad_key: selectedSquad,
+      source_app: sourceApp,
     });
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
@@ -244,6 +288,7 @@ export default function AuthPanel({
       await writeAudit(supabase, "forgot_password_failed", resetEmail, {
         message: resetError.message,
         squad_key: selectedSquad,
+        source_app: sourceApp,
       });
       setError(resetError.message);
       return;
@@ -270,6 +315,9 @@ export default function AuthPanel({
       return;
     }
 
+    const { data: userData } = await supabase.auth.getUser();
+    const userEmail = userData?.user?.email || cleanEmail();
+
     const { error: updateError } = await supabase.auth.updateUser({
       password: resetPassword,
     });
@@ -277,9 +325,16 @@ export default function AuthPanel({
     setLoading(false);
 
     if (updateError) {
+      await writeAudit(supabase, "password_update_failed", userEmail, {
+        message: updateError.message,
+      }, userData?.user?.id);
       setError(updateError.message);
       return;
     }
+
+    await writeAudit(supabase, "password_updated", userEmail, {
+      mode: "reset",
+    }, userData?.user?.id);
 
     setMessage("Password updated. You can now continue into the app.");
     setResetPassword("");

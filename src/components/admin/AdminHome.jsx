@@ -190,6 +190,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [termsRows, setTermsRows] = useState([]);
   const [migrationRows, setMigrationRows] = useState([]);
   const [migrationFilter, setMigrationFilter] = useState("all");
+  const [auditDateRange, setAuditDateRange] = useState("today");
+  const [auditStartDate, setAuditStartDate] = useState("");
+  const [auditEndDate, setAuditEndDate] = useState("");
   const [myChildIds, setMyChildIds] = useState([]);
   const [myChildrenLoading, setMyChildrenLoading] = useState(false);
   const [myChildSquadKey, setMyChildSquadKey] = useState("");
@@ -233,26 +236,114 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     .filter(player => !myChildSquadKey || player.squad_key === myChildSquadKey)
     .sort((a, b) => `${a.squad_key}-${a.name}`.localeCompare(`${b.squad_key}-${b.name}`));
 
+  function startOfToday() {
+    const value = new Date();
+    value.setHours(0, 0, 0, 0);
+    return value;
+  }
+
+  function isAuditRowInDateRange(row) {
+    if (!row?.created_at) return false;
+    if (auditDateRange === "all") return true;
+
+    const eventDate = new Date(row.created_at);
+    const today = startOfToday();
+
+    if (auditDateRange === "today") {
+      return eventDate >= today;
+    }
+
+    if (auditDateRange === "yesterday") {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return eventDate >= yesterday && eventDate < today;
+    }
+
+    if (auditDateRange === "7days") {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return eventDate >= sevenDaysAgo;
+    }
+
+    if (auditDateRange === "custom") {
+      const start = auditStartDate ? new Date(`${auditStartDate}T00:00:00`) : null;
+      const end = auditEndDate ? new Date(`${auditEndDate}T23:59:59`) : null;
+
+      if (start && eventDate < start) return false;
+      if (end && eventDate > end) return false;
+      return true;
+    }
+
+    return true;
+  }
+
+  function auditSourceFor(row) {
+    const details = row?.details || {};
+    return (
+      details.from_app ||
+      details.from ||
+      details.source_app ||
+      row?.source_app ||
+      "direct"
+    );
+  }
+
   const filteredMigrationRows = isSuperAdmin
     ? migrationRows.filter(row => {
         const detailsSquad = row?.details?.squad_key || row?.details?.selected_squad || row?.details?.squadKey;
-        return adminSquad === "all" || !detailsSquad || detailsSquad === adminSquad;
+        const squadMatches = adminSquad === "all" || !detailsSquad || detailsSquad === adminSquad;
+        return squadMatches && isAuditRowInDateRange(row);
       })
     : [];
 
+  const redirectSourceStats = Object.entries(
+    filteredMigrationRows.reduce((totals, row) => {
+      const source = auditSourceFor(row) || "direct";
+      totals[source] = (totals[source] || 0) + 1;
+      return totals;
+    }, {})
+  )
+    .map(([source, total]) => ({ source, total }))
+    .sort((a, b) => b.total - a.total || a.source.localeCompare(b.source));
+
+  const AUDIT_EVENT_GROUPS = {
+    parent_logins: ["login", "login_success", "login_success_existing_account"],
+    accounts_created: ["account_created", "password_created", "create_password_success"],
+    child_link_accessed: ["child_link_accessed", "child_link_opened", "child_view_opened", "child_accessed"],
+    activities_completed: ["activity_completed", "approval_submitted"],
+    gps_runs: ["gps_run_saved"],
+  };
+
+  function eventMatchesAuditFilter(row, filterKey = "all") {
+    const event = String(row?.event || "");
+
+    if (filterKey === "all") return true;
+    if (filterKey === "parent_logins") return AUDIT_EVENT_GROUPS.parent_logins.includes(event);
+    if (filterKey === "accounts_created") return AUDIT_EVENT_GROUPS.accounts_created.includes(event);
+    if (filterKey === "child_link_accessed") return AUDIT_EVENT_GROUPS.child_link_accessed.includes(event);
+    if (filterKey === "activities_completed") return AUDIT_EVENT_GROUPS.activities_completed.includes(event);
+    if (filterKey === "gps_runs") return AUDIT_EVENT_GROUPS.gps_runs.includes(event);
+
+    return true;
+  }
+
   function migrationRowsForFilter(filterKey = "all") {
-    return filteredMigrationRows.filter(row => {
-      if (filterKey === "all") return true;
-      if (filterKey === "parents") return Boolean(row.parent_email);
-      if (filterKey === "accounts") return ["account_created", "password_created"].includes(row.event);
-      if (filterKey === "logins") return row.event === "login";
-      if (filterKey === "children") return row.event === "child_linked" || row.event === "child_removed";
-      if (filterKey === "today") {
-        if (!row.created_at) return false;
-        return new Date(row.created_at).toDateString() === new Date().toDateString();
-      }
-      return true;
-    });
+    return filteredMigrationRows.filter(row => eventMatchesAuditFilter(row, filterKey));
+  }
+
+  function auditCount(filterKey) {
+    return migrationRowsForFilter(filterKey).length;
+  }
+
+  function auditIcon(event = "") {
+    if (AUDIT_EVENT_GROUPS.parent_logins.includes(event)) return "✅";
+    if (AUDIT_EVENT_GROUPS.accounts_created.includes(event)) return "🔐";
+    if (AUDIT_EVENT_GROUPS.child_link_accessed.includes(event)) return "👧";
+    if (event === "child_linked" || event === "child_removed" || event === "child_selected") return "🔗";
+    if (AUDIT_EVENT_GROUPS.gps_runs.includes(event)) return "🏃";
+    if (AUDIT_EVENT_GROUPS.activities_completed.includes(event) || event === "manual_run_saved") return "🎯";
+    if (event === "login_failed" || event === "create_password_failed" || event === "forgot_password_failed") return "⚠️";
+    return "🧾";
   }
 
   const visibleMigrationRows = migrationRowsForFilter(migrationFilter);
@@ -1555,51 +1646,112 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       );
     }
 
-    const loginCount = filteredMigrationRows.filter(row => row.event === "login").length;
-    const accountCount = filteredMigrationRows.filter(row => ["account_created", "password_created"].includes(row.event)).length;
-    const childLinkCount = filteredMigrationRows.filter(row => row.event === "child_linked" || row.event === "child_removed").length;
-
     const statCards = [
       {
-        key: "parents",
-        icon: "👨‍👩‍👧",
-        value: migratedParentEmails.size,
-        label: "Parents seen",
+        key: "parent_logins",
+        icon: "✅",
+        value: auditCount("parent_logins"),
+        label: "Parent logins",
       },
       {
-        key: "accounts",
+        key: "accounts_created",
         icon: "🔐",
-        value: accountCount,
+        value: auditCount("accounts_created"),
         label: "Accounts created",
       },
       {
-        key: "logins",
-        icon: "✅",
-        value: loginCount,
-        label: "Logins",
+        key: "child_link_accessed",
+        icon: "👧",
+        value: auditCount("child_link_accessed"),
+        label: "Child link accessed",
       },
       {
-        key: "children",
-        icon: "🔗",
-        value: childLinkCount,
-        label: "Child activity",
+        key: "activities_completed",
+        icon: "🎯",
+        value: auditCount("activities_completed"),
+        label: "Activities completed",
       },
       {
-        key: "today",
-        icon: "📅",
-        value: migrationTodayCount,
-        label: "Events today",
+        key: "gps_runs",
+        icon: "🏃",
+        value: auditCount("gps_runs"),
+        label: "GPS runs",
       },
       {
         key: "all",
         icon: "🧾",
         value: filteredMigrationRows.length,
-        label: "Total events",
+        label: "Full log events",
       },
     ];
 
     return (
       <div className="admin-panel">
+        <section className="admin-card audit-controls-card">
+          <div className="admin-section-title-row migration-title-row">
+            <div>
+              <h2>Audit Log</h2>
+              <p className="muted">Filter the launch audit trail by date range and old app source.</p>
+            </div>
+          </div>
+
+          <div className="audit-date-controls">
+            <button
+              type="button"
+              className={auditDateRange === "today" ? "active" : ""}
+              onClick={() => setAuditDateRange("today")}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              className={auditDateRange === "yesterday" ? "active" : ""}
+              onClick={() => setAuditDateRange("yesterday")}
+            >
+              Yesterday
+            </button>
+            <button
+              type="button"
+              className={auditDateRange === "7days" ? "active" : ""}
+              onClick={() => setAuditDateRange("7days")}
+            >
+              Last 7 days
+            </button>
+            <button
+              type="button"
+              className={auditDateRange === "all" ? "active" : ""}
+              onClick={() => setAuditDateRange("all")}
+            >
+              All
+            </button>
+          </div>
+
+          <div className="audit-custom-date-row">
+            <label>
+              From
+              <input
+                type="date"
+                value={auditStartDate}
+                onChange={event => {
+                  setAuditStartDate(event.target.value);
+                  setAuditDateRange("custom");
+                }}
+              />
+            </label>
+            <label>
+              To
+              <input
+                type="date"
+                value={auditEndDate}
+                onChange={event => {
+                  setAuditEndDate(event.target.value);
+                  setAuditDateRange("custom");
+                }}
+              />
+            </label>
+          </div>
+        </section>
+
         <div className="admin-stat-grid migration-stat-grid">
           {statCards.map(card => (
             <button
@@ -1627,12 +1779,47 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
           ))}
         </div>
 
+        <section className="admin-card redirect-source-card">
+          <div className="admin-section-title-row migration-title-row">
+            <div>
+              <h2>Redirect Sources</h2>
+              <p className="muted">Where parents are arriving from, based on the from_app value in the old app redirect URL.</p>
+            </div>
+          </div>
+
+          {redirectSourceStats.length ? (
+            <div className="redirect-source-grid">
+              {redirectSourceStats.map(sourceRow => (
+                <button
+                  key={sourceRow.source}
+                  type="button"
+                  className="redirect-source-tile"
+                  onClick={() => {
+                    const rows = filteredMigrationRows.filter(row => auditSourceFor(row) === sourceRow.source);
+                    setDetailModal({
+                      type: "migrationSource",
+                      source: sourceRow.source,
+                      rows,
+                    });
+                  }}
+                >
+                  <strong>{sourceRow.total}</strong>
+                  <span>{displaySquad(sourceRow.source)}</span>
+                  <small>View events →</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No redirect source data found for this date range yet.</p>
+          )}
+        </section>
+
         <section className="admin-card" ref={migrationListRef}>
           <div className="admin-section-title-row migration-title-row">
             <div>
               <h2>Audit Log Trail</h2>
               <p className="muted">
-                SuperAdmin-only view of parent logins, account creation and child linking events from the new shared app.
+                SuperAdmin-only view of parent logins, accounts created, child link access, activities completed, GPS runs and full log events.
               </p>
             </div>
 
@@ -1666,13 +1853,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                     onClick={() => setDetailModal({ type: "migration", row })}
                   >
                     <span>
-                      {row.event === "login"
-                        ? "✅"
-                        : row.event === "account_created" || row.event === "password_created"
-                          ? "🔐"
-                          : row.event === "child_linked" || row.event === "child_removed"
-                            ? "🔗"
-                            : "🧭"}
+                      {auditIcon(row.event)}
                     </span>
                     <div>
                       <strong>{row.parent_email || "Unknown parent"}</strong>
@@ -1741,13 +1922,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                       onClick={() => setDetailModal({ type: "migration", row })}
                     >
                       <span>
-                        {row.event === "login"
-                          ? "✅"
-                          : row.event === "account_created" || row.event === "password_created"
-                            ? "🔐"
-                            : row.event === "child_linked" || row.event === "child_removed"
-                              ? "🔗"
-                              : "🧭"}
+                        {auditIcon(row.event)}
                       </span>
                       <div>
                         <strong>{row.parent_email || "Unknown parent"}</strong>
@@ -1770,6 +1945,53 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       );
     }
 
+    if (typeof detailModal === "object" && detailModal.type === "migrationSource") {
+      const rows = detailModal.rows || [];
+
+      return (
+        <div className="admin-modal-backdrop" onClick={() => setDetailModal(null)}>
+          <div className="admin-modal migration-list-modal" onClick={event => event.stopPropagation()}>
+            <button className="admin-drawer-close" onClick={() => setDetailModal(null)}>×</button>
+
+            <h2>{displaySquad(detailModal.source)} Redirect Source</h2>
+            <p className="muted">Events linked to this old app/source for the selected date range.</p>
+
+            <div className="admin-feed-list migration-feed-list migration-modal-feed-list">
+              {rows.length ? (
+                rows.map(row => {
+                  const details = row.details || {};
+                  const squad = details.squad_key || details.selected_squad || details.squadKey || "all squads";
+                  const childName = details.child_name || details.player_name || "";
+
+                  return (
+                    <button
+                      type="button"
+                      className="admin-feed-row migration-feed-row"
+                      key={row.id}
+                      onClick={() => setDetailModal({ type: "migration", row })}
+                    >
+                      <span>{auditIcon(row.event)}</span>
+                      <div>
+                        <strong>{row.parent_email || "Unknown parent"}</strong>
+                        <small>
+                          {row.event}
+                          {childName ? ` · ${childName}` : ""}
+                          {squad ? ` · ${squad}` : ""}
+                        </small>
+                      </div>
+                      <em>{dateTime(row.created_at)}</em>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="muted">No events found for this source.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (typeof detailModal === "object" && detailModal.type === "migration") {
       const row = detailModal.row || {};
       const details = row.details || {};
@@ -1784,13 +2006,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
             <div className="migration-detail-card">
               <span>
-                {row.event === "login"
-                  ? "✅"
-                  : row.event === "account_created" || row.event === "password_created"
-                    ? "🔐"
-                    : row.event === "child_linked" || row.event === "child_removed"
-                      ? "🔗"
-                      : "🧭"}
+                {auditIcon(row.event)}
               </span>
               <div>
                 <strong>{row.parent_email || "Unknown parent"}</strong>

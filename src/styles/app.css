@@ -12179,3 +12179,107 @@ button.migration-feed-row:hover {
     flex: 1;
   }
 }
+
+/* Audit Log date range + redirect source view */
+.audit-controls-card {
+  overflow: visible;
+}
+
+.audit-date-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.audit-date-controls button {
+  border: 1px solid rgba(155, 0, 28, 0.18);
+  background: #fff8ef;
+  color: #7a0017;
+  border-radius: 14px;
+  padding: 12px 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.audit-date-controls button.active {
+  background: #9b001c;
+  color: #fff;
+  border-color: #9b001c;
+  box-shadow: 0 10px 24px rgba(155, 0, 28, 0.22);
+}
+
+.audit-custom-date-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.audit-custom-date-row label {
+  display: grid;
+  gap: 6px;
+  color: #4b252d;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.audit-custom-date-row input {
+  width: 100%;
+  border: 1px solid rgba(155, 0, 28, 0.16);
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  color: #351b20;
+  font: inherit;
+  font-weight: 800;
+}
+
+.redirect-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.redirect-source-tile {
+  text-align: left;
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
+  border-radius: 18px;
+  padding: 16px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(53, 27, 32, 0.08);
+}
+
+.redirect-source-tile strong {
+  display: block;
+  color: #9b001c;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.redirect-source-tile span {
+  display: block;
+  margin-top: 8px;
+  color: #351b20;
+  font-weight: 900;
+}
+
+.redirect-source-tile small {
+  display: block;
+  margin-top: 6px;
+  color: #7a6269;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .audit-date-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .audit-custom-date-row {
+    grid-template-columns: 1fr;
+  }
+}
