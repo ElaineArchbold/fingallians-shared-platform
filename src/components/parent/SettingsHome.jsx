@@ -107,6 +107,13 @@ export default function SettingsHome({
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [soundEffectsOn, setSoundEffectsOn] = useState(() => {
+    try {
+      return localStorage.getItem("fingalliansSoundEffectsOn") !== "false";
+    } catch {
+      return true;
+    }
+  });
 
   const whatsappLink = getSquadWhatsAppLink(squadConfig.key);
   const hasMultipleChildren = players.length > 1;
@@ -122,6 +129,20 @@ export default function SettingsHome({
   const playersForSelectedSquad = allPlayers.filter(
     player => !addSquadKey || player.squad_key === addSquadKey
   );
+
+  function toggleSoundEffects() {
+    setSoundEffectsOn(previous => {
+      const next = !previous;
+
+      try {
+        localStorage.setItem("fingalliansSoundEffectsOn", String(next));
+      } catch {
+        // Ignore localStorage errors, but still update the UI state.
+      }
+
+      return next;
+    });
+  }
 
   async function writeSettingsAudit(event, details = {}) {
     try {
@@ -419,6 +440,35 @@ export default function SettingsHome({
           ) : (
             <p className="muted">No WhatsApp group link has been added for this squad yet.</p>
           )}
+        </div>
+      </section>
+
+      <section className="settings-card">
+        <h2>Audio</h2>
+
+        <div className="settings-card-content">
+          <div className="settings-toggle-row">
+            <div className="settings-toggle-copy">
+              <strong>🔊 Sound Effects</strong>
+              <p className="muted">Play sounds when completing activities.</p>
+            </div>
+
+            <div className="settings-toggle-control">
+              <span className={!soundEffectsOn ? "active" : ""}>OFF</span>
+
+              <button
+                type="button"
+                className={`settings-toggle-button ${soundEffectsOn ? "on" : ""}`}
+                onClick={toggleSoundEffects}
+                aria-label="Toggle sound effects"
+                aria-pressed={soundEffectsOn}
+              >
+                <span />
+              </button>
+
+              <span className={soundEffectsOn ? "active" : ""}>ON</span>
+            </div>
+          </div>
         </div>
       </section>
 

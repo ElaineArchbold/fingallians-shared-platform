@@ -162,6 +162,7 @@ export default function ChallengeHome({
 }) {
   const [toast, setToast] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
+  const [completionBurst, setCompletionBurst] = useState(null);
   const [squadOpen, setSquadOpen] = useState(false);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryVideoOpen, setRecoveryVideoOpen] = useState(false);
@@ -192,9 +193,24 @@ export default function ChallengeHome({
     setTimeout(() => setToast(""), 3400);
   }
 
-  function celebrate() {
+  function celebrate(activity, options = {}) {
+    const isRecovery = activity?.activity_key === "recovery";
+    const isWeekComplete = Boolean(options.isWeekComplete);
+    const isChallengeComplete = Boolean(options.isChallengeComplete);
+
+    const burst = isChallengeComplete
+      ? { icon: "🎉", title: "Challenge Complete!", subtitle: "Amazing effort all summer." }
+      : isWeekComplete
+        ? { icon: "🏆", title: "Week Complete!", subtitle: `Week ${safeWeek} finished.` }
+        : isRecovery
+          ? { icon: "🩵", title: "Recovered!", subtitle: "Great job listening to your body." }
+          : { icon: "👏", title: "Great Job!", subtitle: "Activity complete." };
+
+    setCompletionBurst(burst);
     setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 1200);
+
+    setTimeout(() => setShowConfetti(false), isWeekComplete || isChallengeComplete ? 1800 : 1300);
+    setTimeout(() => setCompletionBurst(null), isWeekComplete || isChallengeComplete ? 2100 : 1600);
   }
 
   async function toggleActivity(activity) {
@@ -211,7 +227,11 @@ export default function ChallengeHome({
     }
 
     if (!wasDone) {
-      celebrate();
+      const nextCompletedCount = Math.min(totalMissions, completedCount + 1);
+      const isWeekComplete = nextCompletedCount >= totalMissions;
+      const isChallengeComplete = isWeekComplete && Number(safeWeek) >= 8;
+
+      celebrate(activity, { isWeekComplete, isChallengeComplete });
     }
   }
 
@@ -321,6 +341,13 @@ export default function ChallengeHome({
   return (
     <div className="challenge-page">
       {showConfetti && <div className="confetti-pop">🎉</div>}
+      {completionBurst ? (
+        <div className="completion-burst" aria-hidden="true">
+          <span>{completionBurst.icon}</span>
+          <strong>{completionBurst.title}</strong>
+          <small>{completionBurst.subtitle}</small>
+        </div>
+      ) : null}
       {toast ? <div className="app-toast">{toast}</div> : null}
 
       <section className="player-card">

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
-import { playCompleteDing } from "../../lib/sounds";
+import { playActivityComplete } from "../../lib/sounds";
 import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
 
 const CURRENT_WEEK = getCurrentChallengeWeek();
@@ -72,6 +72,96 @@ export default function ChildHome({
 
   const { weeks } = useAllWeeklyActivities(supabase, childSquadConfig.key);
 
+  async function findParentForChild(foundPlayer) {
+    if (!foundPlayer?.id) {
+      return { parentEmail: null, parentUserId: null, source: "none" };
+    }
+
+    try {
+      const { data: linkedAuditRows } = await supabase
+        .from("migration_audit")
+        .select("parent_email,parent_user_id,created_at,event,details")
+        .in("event", ["child_linked", "admin_child_linked"])
+        .filter("details->>player_id", "eq", foundPlayer.id)
+        .not("parent_email", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const auditMatch = linkedAuditRows?.[0];
+
+      if (auditMatch?.parent_email || auditMatch?.parent_user_id) {
+        return {
+          parentEmail: auditMatch.parent_email || null,
+          parentUserId: auditMatch.parent_user_id || null,
+          source: "migration_audit_child_linked",
+        };
+      }
+    } catch (auditLookupError) {
+      console.warn("Could not look up parent from child_linked audit", auditLookupError);
+    }
+
+    try {
+      const { data: parentRows } = await supabase
+        .from("parent_players")
+        .select("user_id")
+        .eq("player_id", foundPlayer.id)
+        .limit(1);
+
+      const parentMatch = parentRows?.[0];
+
+      if (parentMatch?.user_id) {
+        return {
+          parentEmail: null,
+          parentUserId: parentMatch.user_id,
+          source: "parent_players_user_id_only",
+        };
+      }
+    } catch (parentLookupError) {
+      console.warn("Could not look up parent_players row for child link", parentLookupError);
+    }
+
+    return { parentEmail: null, parentUserId: null, source: "not_found" };
+  }
+
+  async function logChildLinkAccess(foundPlayer, token) {
+    if (!foundPlayer?.id) return;
+
+    const auditKey = `childLinkAccessLogged:${foundPlayer.id}:${token}`;
+    const alreadyLoggedThisBrowserTab = sessionStorage.getItem(auditKey) === "true";
+    const parentInfo = await findParentForChild(foundPlayer);
+
+    const auditRow = {
+      parent_email: parentInfo.parentEmail,
+      parent_user_id: parentInfo.parentUserId,
+      event: "child_link_accessed",
+      details: {
+        player_id: foundPlayer.id,
+        child_name: foundPlayer.name,
+        squad_key: foundPlayer.squad_key,
+        child_token_suffix: token ? String(token).slice(-6) : null,
+        parent_lookup_source: parentInfo.source,
+        source: "child_view",
+        access_type: alreadyLoggedThisBrowserTab ? "repeat_view_same_tab" : "page_view",
+        path: window.location.pathname,
+        url: window.location.href,
+        user_agent: navigator.userAgent,
+      },
+    };
+
+    try {
+      const { error } = await supabase.from("migration_audit").insert(auditRow);
+
+      if (error) {
+        console.error("Child link migration_audit insert failed", error);
+        return;
+      }
+
+      sessionStorage.setItem(auditKey, "true");
+    } catch (auditError) {
+      console.error("Child link audit insert failed", auditError);
+    }
+  }
+
   useEffect(() => {
     async function loadPlayerFromToken() {
       const token = childToken || localStorage.getItem("childAccessToken");
@@ -99,6 +189,7 @@ export default function ChildHome({
 
       localStorage.setItem("childPlayerId", data.id);
       localStorage.setItem("childSquadKey", data.squad_key || "");
+      await logChildLinkAccess(data, token);
       setPlayer(data);
       setLoading(false);
     }
@@ -269,8 +360,12 @@ export default function ChildHome({
 
     await refreshPlayerData(playerId);
 
-    if (status === "completed" || status === "awaiting_approval") {
-      playCompleteDing();
+    if (
+      (status === "completed" || status === "awaiting_approval") &&
+      completionType !== "gps" &&
+      completionType !== "manual"
+    ) {
+      playActivityComplete();
     }
 
     return data;

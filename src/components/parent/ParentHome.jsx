@@ -4,7 +4,7 @@ import ProgressHome from "./ProgressHome";
 import SettingsHome from "./SettingsHome";
 import RunLoggerModal from "./RunLoggerModal";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
-import { playCompleteDing } from "../../lib/sounds";
+import { playActivityComplete } from "../../lib/sounds";
 import { getCurrentChallengeWeek, clampChallengeWeek } from "../../lib/challengeWeeks";
 
 
@@ -633,8 +633,12 @@ export default function ParentHome({
     await maybeAwardBadges(playerId);
     await refreshPlayerData(playerId);
 
-    if (status === "completed" || status === "awaiting_approval") {
-      playCompleteDing();
+    if (
+      (status === "completed" || status === "awaiting_approval") &&
+      completionType !== "gps" &&
+      completionType !== "manual"
+    ) {
+      playActivityComplete();
     }
 
     return data;

@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import * as htmlToImage from "html-to-image";
+import {
+  playCountdownGo,
+  playCountdownReady,
+  playCountdownSet,
+  playRunSaved,
+} from "../../lib/sounds";
 
 const DEFAULT_CENTER = [53.389, -6.246];
 
@@ -316,34 +322,7 @@ export default function RunLoggerModal({
   }
 
   function playRunCompleteDing() {
-    try {
-      const context = getAudioContext();
-      if (!context) return;
-
-      const now = context.currentTime;
-      const notes = [523, 659, 784, 1046];
-
-      notes.forEach((frequency, index) => {
-        const start = now + index * 0.08;
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-
-        oscillator.type = "triangle";
-        oscillator.frequency.setValueAtTime(frequency, start);
-
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32);
-
-        oscillator.connect(gain);
-        gain.connect(context.destination);
-
-        oscillator.start(start);
-        oscillator.stop(start + 0.34);
-      });
-    } catch {
-      // Sound is a bonus only.
-    }
+    playRunSaved();
   }
 
   function showRunCompleteCelebration() {
@@ -398,43 +377,17 @@ export default function RunLoggerModal({
   }
 
   function playCountdownTone(step) {
-    try {
-      const context = getAudioContext();
-      if (!context) return;
-
-      const now = context.currentTime;
-
-      const notes =
-        step === "READY"
-          ? [392, 523]
-          : step === "SET"
-            ? [523, 659]
-            : [659, 784, 1046, 1318];
-
-      notes.forEach((frequency, index) => {
-        const start = now + index * 0.075;
-        const duration = step === "GO!" ? 0.38 : 0.24;
-
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-
-        oscillator.type = step === "GO!" ? "square" : "sawtooth";
-        oscillator.frequency.setValueAtTime(frequency, start);
-        oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.08, start + duration);
-
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.26, start + 0.018);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-        oscillator.connect(gain);
-        gain.connect(context.destination);
-
-        oscillator.start(start);
-        oscillator.stop(start + duration + 0.02);
-      });
-    } catch {
-      // Sound is a bonus only.
+    if (step === "READY") {
+      playCountdownReady();
+      return;
     }
+
+    if (step === "SET") {
+      playCountdownSet();
+      return;
+    }
+
+    playCountdownGo();
   }
 
   function startTrafficLightCountdown() {
@@ -942,8 +895,13 @@ export default function RunLoggerModal({
         </div>
 
         {showSuccessConfetti ? (
-          <div className="confetti-pop" aria-hidden="true">
-            🎉
+          <div className="run-complete-celebration-shell" aria-hidden="true">
+            <div className="run-complete-celebration">
+              <span>🏁</span>
+              <strong>Run Complete!</strong>
+              <small>Great job!</small>
+              <em>👏 👏 👏</em>
+            </div>
           </div>
         ) : null}
       </div>
@@ -1095,9 +1053,14 @@ export default function RunLoggerModal({
         ) : null}
 
         {countdownStep ? (
-          <div className="run-countdown-backdrop">
+          <div className={`run-countdown-backdrop ${countdownStep === "GO!" ? "is-go" : ""}`}>
+            {countdownStep === "GO!" ? (
+              <div className="race-flag-sweep" aria-hidden="true">🏁</div>
+            ) : null}
+
             <div className={`run-countdown-light ${countdownStep.toLowerCase().replace("!", "")}`}>
-              <span>{countdownStep}</span>
+              <span>{countdownStep === "GO!" ? "GO!" : countdownStep}</span>
+              {countdownStep === "GO!" ? <em aria-hidden="true">🏁</em> : null}
             </div>
           </div>
         ) : null}

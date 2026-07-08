@@ -197,6 +197,8 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [myChildrenLoading, setMyChildrenLoading] = useState(false);
   const [myChildSquadKey, setMyChildSquadKey] = useState("");
   const [myChildPlayerId, setMyChildPlayerId] = useState("");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [detailModal, setDetailModal] = useState(null);
   const [planWeek, setPlanWeek] = useState(1);
@@ -218,6 +220,18 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (adminSquad === "all") return players;
     return players.filter(player => player.squad_key === adminSquad);
   }, [players, adminSquad]);
+
+  const searchedFilteredPlayers = useMemo(() => {
+    const search = playerSearch.trim().toLowerCase();
+
+    if (!search) return filteredPlayers;
+
+    return filteredPlayers.filter(player =>
+      String(player.name || "").toLowerCase().includes(search) ||
+      String(player.squad_key || "").toLowerCase().includes(search) ||
+      String(player.squad || "").toLowerCase().includes(search)
+    );
+  }, [filteredPlayers, playerSearch]);
 
   const filteredIds = useMemo(() => new Set(filteredPlayers.map(player => player.id)), [filteredPlayers]);
 
@@ -1214,53 +1228,96 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   function renderPlayers() {
     return (
       <div className="admin-panel">
-        <section className="admin-card">
-          <h2>Add Player</h2>
+        <section className="admin-card admin-player-search-card">
+          <h2>Search Players</h2>
+          <p className="muted">
+            Search by player name or squad. This is only for finding existing players.
+          </p>
 
-          <form
-            className="admin-add-player"
-            onSubmit={event => {
-              event.preventDefault();
-              addPlayer(new FormData(event.currentTarget));
-              event.currentTarget.reset();
-            }}
-          >
-            <input className="input" name="name" placeholder="Player name" />
+          <input
+            className="input admin-player-search-input"
+            value={playerSearch}
+            onChange={event => setPlayerSearch(event.target.value)}
+            placeholder="Search players..."
+          />
+        </section>
 
-            <select className="select" name="squad_key" defaultValue={adminSquad === "all" ? "" : adminSquad}>
-              <option value="">Choose squad</option>
-              {SQUADS.filter(item => item.key !== "all").map(item => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+        <section className="admin-card admin-add-player-card">
+          <div className="admin-section-title-row">
+            <div>
+              <h2>Add Player</h2>
+              <p className="muted">
+                Use this only when you need to create a brand new player.
+              </p>
+            </div>
 
-            <button className="button primary">Add Player</button>
-          </form>
+            <button
+              type="button"
+              className="button primary admin-add-player-toggle"
+              onClick={() => setShowAddPlayerForm(previous => !previous)}
+            >
+              {showAddPlayerForm ? "Close" : "+ Add Player"}
+            </button>
+          </div>
+
+          {showAddPlayerForm ? (
+            <form
+              className="admin-add-player admin-add-player-form"
+              onSubmit={event => {
+                event.preventDefault();
+                addPlayer(new FormData(event.currentTarget));
+                event.currentTarget.reset();
+                setShowAddPlayerForm(false);
+              }}
+            >
+              <input className="input" name="name" placeholder="New player name" />
+
+              <select className="select" name="squad_key" defaultValue={adminSquad === "all" ? "" : adminSquad}>
+                <option value="">Choose squad</option>
+                {SQUADS.filter(item => item.key !== "all").map(item => (
+                  <option key={item.key} value={item.key}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+
+              <button className="button primary">Save Player</button>
+            </form>
+          ) : null}
         </section>
 
         <section className="admin-card">
-          <h2>Players</h2>
+          <div className="admin-section-title-row">
+            <div>
+              <h2>Players</h2>
+              <p className="muted">
+                Showing {searchedFilteredPlayers.length} of {filteredPlayers.length} player{filteredPlayers.length === 1 ? "" : "s"}.
+              </p>
+            </div>
+          </div>
 
           <div className="admin-player-list">
-            {filteredPlayers.map(player => {
-              const playerXp = playerXpFor(player);
-              const playerDistance = playerDistanceFor(player);
+            {searchedFilteredPlayers.length ? (
+              searchedFilteredPlayers.map(player => {
+                const playerXp = playerXpFor(player);
+                const playerDistance = playerDistanceFor(player);
 
-              return (
-                <button key={player.id} className="admin-player-row" onClick={() => setSelectedPlayer(player)}>
-                  <span>{initials(player.name)}</span>
-                  <div>
-                    <strong>{player.name}</strong>
-                    <small>
-                      {displaySquad(player.squad_key)} · {playerXp} XP · {playerDistance.toFixed(1)} km
-                    </small>
-                  </div>
-                  <em>Manage</em>
-                </button>
-              );
-            })}
+                return (
+                  <button key={player.id} className="admin-player-row" onClick={() => setSelectedPlayer(player)}>
+                    <span>{initials(player.name)}</span>
+                    <div>
+                      <strong>{player.name}</strong>
+                      <small>
+                        {displaySquad(player.squad_key)} · {playerXp} XP · {playerDistance.toFixed(1)} km
+                      </small>
+                    </div>
+                    <em>Manage</em>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="muted">No players match that search.</p>
+            )}
           </div>
         </section>
 
@@ -1269,7 +1326,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
-  function renderPlayerDrawer(player) {
+function renderPlayerDrawer(player) {
     const playerRuns = playerRunsFor(player);
     const playerCompletions = playerCompletionsFor(player);
     const playerXp = playerXpFor(player);

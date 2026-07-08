@@ -12283,3 +12283,543 @@ button.migration-feed-row:hover {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Admin Players search/add layout */
+.admin-player-search-card .admin-section-title-row {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.admin-add-player-toggle {
+  white-space: nowrap;
+}
+
+.admin-player-search-input {
+  margin-top: 14px;
+}
+
+.admin-add-player-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(120, 40, 40, 0.12);
+}
+
+@media (max-width: 680px) {
+  .admin-player-search-card .admin-section-title-row {
+    display: block;
+  }
+
+  .admin-add-player-toggle {
+    width: 100%;
+    margin-top: 12px;
+  }
+}
+
+/* Admin Players: separate Search Players from Add Player */
+.admin-player-search-card .admin-section-title-row {
+  display: block;
+}
+
+.admin-player-search-card .admin-player-search-input {
+  margin-top: 18px;
+  width: 100%;
+}
+
+.admin-add-player-card .admin-section-title-row {
+  align-items: center;
+  gap: 16px;
+}
+
+.admin-add-player-toggle {
+  width: auto;
+  min-width: 160px;
+  white-space: nowrap;
+}
+
+.admin-add-player-form {
+  margin-top: 18px;
+}
+
+@media (max-width: 720px) {
+  .admin-add-player-card .admin-section-title-row {
+    display: block;
+  }
+
+  .admin-add-player-toggle {
+    width: 100%;
+    margin-top: 14px;
+  }
+}
+
+.confetti-pop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-size: 72px;
+  animation: confettiPop 1.2s ease-out forwards;
+}
+
+@keyframes confettiPop {
+  0% {
+    transform: scale(0.4) rotate(-8deg);
+    opacity: 0;
+  }
+  20% {
+    transform: scale(1.25) rotate(6deg);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6) rotate(8deg);
+    opacity: 0;
+  }
+}
+
+/* =====================================================
+   Version 1.1 Sound Effects Toggle
+===================================================== */
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #f0e1df;
+  background: #fff8f8;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.settings-toggle-copy {
+  min-width: 0;
+}
+
+.settings-toggle-copy strong {
+  display: block;
+  color: var(--text);
+  font-weight: 900;
+}
+
+.settings-toggle-copy p {
+  margin: 4px 0 0;
+}
+
+.settings-toggle-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.settings-toggle-control span.active {
+  color: var(--club-red);
+}
+
+.settings-toggle-button {
+  position: relative;
+  width: 58px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: #d8ced0;
+  padding: 4px;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .12);
+}
+
+.settings-toggle-button span {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: white;
+  transform: translateX(0);
+  transition: var(--transition);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .2);
+}
+
+.settings-toggle-button.on {
+  background: linear-gradient(135deg, var(--club-red-bright), var(--club-red-dark));
+}
+
+.settings-toggle-button.on span {
+  transform: translateX(26px);
+}
+
+.settings-toggle-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(197, 20, 23, .16), inset 0 2px 5px rgba(0, 0, 0, .12);
+}
+
+@media (max-width: 520px) {
+  .settings-toggle-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+
+/* =====================================================
+   Version 1.1 Game Feel: whistle start, race flag, cheers
+   Appended last so these rules safely override older versions.
+===================================================== */
+
+.run-countdown-backdrop.is-go {
+  background:
+    radial-gradient(circle at center, rgba(34, 197, 94, .28), transparent 34%),
+    rgba(15, 23, 42, .78);
+  overflow: hidden;
+}
+
+.run-countdown-light {
+  position: relative;
+  isolation: isolate;
+}
+
+.run-countdown-light.go {
+  animation: runGoPulse .78s cubic-bezier(.2, 1.25, .2, 1) both;
+  box-shadow:
+    0 0 0 14px rgba(34, 197, 94, .18),
+    0 28px 80px rgba(0, 0, 0, .36),
+    0 0 46px rgba(34, 197, 94, .58);
+}
+
+.run-countdown-light.go span {
+  transform: translateY(-4px);
+}
+
+.run-countdown-light.go em {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  font-style: normal;
+  font-size: clamp(42px, 13vw, 76px);
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, .28));
+  animation: raceFlagPop .7s ease both;
+}
+
+.race-flag-sweep {
+  position: fixed;
+  left: -30vw;
+  top: 24vh;
+  z-index: 10003;
+  font-size: clamp(72px, 22vw, 150px);
+  filter: drop-shadow(0 18px 26px rgba(0, 0, 0, .34));
+  animation: raceFlagSweep .86s cubic-bezier(.2, .86, .2, 1) both;
+  pointer-events: none;
+}
+
+@keyframes runGoPulse {
+  0% { transform: scale(.72); opacity: .55; }
+  48% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes raceFlagPop {
+  0% { transform: translate(16px, 18px) scale(.25) rotate(-18deg); opacity: 0; }
+  45% { transform: translate(0, 0) scale(1.22) rotate(8deg); opacity: 1; }
+  100% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes raceFlagSweep {
+  0% { transform: translateX(0) rotate(-18deg) scale(.82); opacity: 0; }
+  12% { opacity: 1; }
+  62% { transform: translateX(66vw) rotate(8deg) scale(1.1); opacity: 1; }
+  100% { transform: translateX(132vw) rotate(16deg) scale(.96); opacity: 0; }
+}
+
+.confetti-pop {
+  font-size: clamp(92px, 24vw, 160px) !important;
+  animation: confettiPop 1.35s cubic-bezier(.2, 1.1, .2, 1) forwards !important;
+}
+
+.completion-burst,
+.run-complete-celebration {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 13000;
+  transform: translate(-50%, -50%);
+  width: min(390px, calc(100vw - 32px));
+  border-radius: 30px;
+  padding: 24px 20px 22px;
+  text-align: center;
+  pointer-events: none;
+  color: white;
+  border: 2px solid rgba(255,255,255,.36);
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,.32), transparent 32%),
+    linear-gradient(135deg, #f59e0b, #ef4444 58%, #991b1b);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, .38);
+  animation: completionBurstPop 1.55s ease both;
+}
+
+.completion-burst span,
+.run-complete-celebration span {
+  display: block;
+  font-size: 60px;
+  line-height: 1;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 8px 14px rgba(0,0,0,.22));
+  animation: celebrationIconBounce .72s ease both;
+}
+
+.completion-burst strong,
+.run-complete-celebration strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: clamp(30px, 9vw, 46px);
+  line-height: .88;
+  text-transform: uppercase;
+  letter-spacing: .01em;
+  color: white;
+  text-shadow: 0 4px 16px rgba(0,0,0,.24);
+}
+
+.completion-burst small,
+.run-complete-celebration em {
+  display: block;
+  margin-top: 9px;
+  color: rgba(255,255,255,.94);
+  font-size: 17px;
+  font-weight: 950;
+  font-style: normal;
+}
+
+.run-complete-celebration {
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,.30), transparent 32%),
+    linear-gradient(135deg, #16a34a, #15803d 50%, #14532d);
+  animation-duration: 1.8s;
+}
+
+.run-complete-celebration span {
+  font-size: 72px;
+}
+
+@keyframes completionBurstPop {
+  0% { opacity: 0; transform: translate(-50%, -44%) scale(.74) rotate(-2deg); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1.06) rotate(1deg); }
+  72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -58%) scale(.94); }
+}
+
+@keyframes celebrationIconBounce {
+  0% { transform: scale(.4) rotate(-14deg); opacity: 0; }
+  45% { transform: scale(1.22) rotate(8deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.challenge-run-card-achieved {
+  animation: achievedGlow 1.2s ease both;
+}
+
+@keyframes achievedGlow {
+  0% { transform: scale(.96); box-shadow: 0 0 0 rgba(47, 139, 53, 0); }
+  45% { transform: scale(1.04); box-shadow: 0 0 0 9px rgba(47, 139, 53, .14); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(47, 139, 53, 0); }
+}
+
+.my-badges-button,
+.badge-feature-card,
+.fitness-pill,
+.drill-complete-button,
+.recovery-complete-button {
+  will-change: transform;
+}
+
+.fitness-pill.is-complete,
+.drill-complete-button.is-complete,
+.recovery-complete-button.is-complete,
+.my-badges-button:hover {
+  animation: softRewardPulse .54s ease both;
+}
+
+@keyframes softRewardPulse {
+  0% { transform: scale(1); }
+  42% { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+
+.player-xp-bar div,
+.level-fill,
+.weekly-progress-bar span {
+  transition: width .45s cubic-bezier(.2, .9, .2, 1), filter .3s ease;
+}
+
+.player-xp-bar div {
+  filter: drop-shadow(0 0 8px rgba(247, 201, 72, .34));
+}
+
+.week-complete-confetti {
+  font-size: clamp(70px, 18vw, 120px) !important;
+}
+
+.new-badge-toast {
+  animation: badgeToastPop .36s ease both, badgeToastGlow 1.6s ease .25s both;
+}
+
+@keyframes badgeToastGlow {
+  0%, 100% { box-shadow: 0 18px 42px rgba(15, 23, 42, .26); }
+  45% { box-shadow: 0 18px 42px rgba(245, 158, 11, .36), 0 0 0 9px rgba(245, 158, 11, .14); }
+}
+
+@media (max-width: 480px) {
+  .completion-burst,
+  .run-complete-celebration {
+    width: min(330px, calc(100vw - 24px));
+    border-radius: 26px;
+    padding: 22px 16px 20px;
+  }
+
+  .completion-burst span,
+  .run-complete-celebration span {
+    font-size: 54px;
+  }
+
+  .race-flag-sweep {
+    top: 27vh;
+  }
+}
+
+
+/* =====================================================
+   V1.1 applause + centered manual/GPS run completion fix
+   Additive override: keep both manual and GPS celebrations centered.
+===================================================== */
+
+.run-complete-celebration-shell {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 14000 !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  padding: 18px !important;
+  pointer-events: none !important;
+  background:
+    radial-gradient(circle at center, rgba(247, 201, 72, .22), transparent 42%),
+    rgba(15, 23, 42, .20) !important;
+  animation: runCelebrationShellFade 1.8s ease forwards !important;
+}
+
+.run-complete-celebration-shell .run-complete-celebration {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: min(390px, calc(100vw - 32px)) !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  border-radius: 30px !important;
+  padding: 24px 20px 22px !important;
+  text-align: center !important;
+  pointer-events: none !important;
+  color: white !important;
+  border: 2px solid rgba(255,255,255,.36) !important;
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,.30), transparent 32%),
+    linear-gradient(135deg, #16a34a, #15803d 50%, #14532d) !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, .38) !important;
+  animation: runCompleteCardPop 1.8s ease both !important;
+}
+
+.run-complete-celebration-shell .run-complete-celebration span {
+  display: block !important;
+  font-size: clamp(72px, 19vw, 118px) !important;
+  line-height: 1 !important;
+  margin-bottom: 8px !important;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.24)) !important;
+  animation: runCompleteFlagBounce .86s ease both !important;
+}
+
+.run-complete-celebration-shell .run-complete-celebration strong {
+  display: block !important;
+  font-family: var(--font-heading) !important;
+  font-size: clamp(32px, 9vw, 50px) !important;
+  line-height: .88 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .01em !important;
+  color: white !important;
+  text-shadow: 0 4px 16px rgba(0,0,0,.24) !important;
+}
+
+.run-complete-celebration-shell .run-complete-celebration small {
+  display: block !important;
+  margin-top: 8px !important;
+  color: rgba(255,255,255,.95) !important;
+  font-size: 16px !important;
+  font-weight: 950 !important;
+  text-transform: uppercase !important;
+  letter-spacing: .03em !important;
+}
+
+.run-complete-celebration-shell .run-complete-celebration em {
+  display: block !important;
+  margin-top: 10px !important;
+  color: white !important;
+  font-style: normal !important;
+  font-size: clamp(24px, 7vw, 38px) !important;
+  animation: applausePop 1.1s ease both !important;
+}
+
+/* Backwards compatibility if an older RunLoggerModal still renders the card directly. */
+.run-modal-backdrop > .run-complete-celebration {
+  position: fixed !important;
+  left: 50vw !important;
+  top: 50dvh !important;
+  z-index: 14000 !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(390px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+}
+
+@keyframes runCelebrationShellFade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes runCompleteCardPop {
+  0% { opacity: 0; transform: translateY(28px) scale(.76) rotate(-2deg); }
+  18% { opacity: 1; transform: translateY(0) scale(1.06) rotate(1deg); }
+  70% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-18px) scale(.96); }
+}
+
+@keyframes runCompleteFlagBounce {
+  0% { opacity: 0; transform: translateY(24px) rotate(-18deg) scale(.44); }
+  48% { opacity: 1; transform: translateY(-8px) rotate(9deg) scale(1.18); }
+  100% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+}
+
+@media (max-width: 480px) {
+  .run-complete-celebration-shell {
+    padding: 12px !important;
+    align-items: center !important;
+    justify-items: center !important;
+  }
+
+  .run-complete-celebration-shell .run-complete-celebration {
+    width: min(330px, calc(100vw - 24px)) !important;
+    border-radius: 26px !important;
+    padding: 22px 16px 20px !important;
+  }
+}
