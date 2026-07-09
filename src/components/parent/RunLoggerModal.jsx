@@ -585,6 +585,19 @@ export default function RunLoggerModal({
     savingRef.current = true;
     setSaving(true);
 
+    const routePoints = pointsRef.current;
+    const gpsDurationMin =
+      routePoints.length >= 2
+        ? Math.max(
+            1,
+            Math.round(
+              (routePoints[routePoints.length - 1].ts - routePoints[0].ts) /
+                60000
+            )
+          )
+        : Math.max(1, Math.round(elapsed / 60));
+    const gpsPace = paceFromSeconds(gpsDurationMin * 60, distanceKm);
+
     const saved = {
       type: "gps",
       activityId: activity.id,
@@ -592,10 +605,10 @@ export default function RunLoggerModal({
       title: activity.title,
       targetKm,
       distanceKm,
-      durationMin: Math.max(1, Math.round(elapsed / 60)),
-      pace,
-      pointCount: pointsRef.current.length,
-      routePoints: pointsRef.current,
+      durationMin: gpsDurationMin,
+      pace: gpsPace,
+      pointCount: routePoints.length,
+      routePoints,
       savedAt: new Date().toISOString(),
       locked: true,
     };
@@ -1119,5 +1132,7 @@ export default function RunLoggerModal({
         ) : null}
       </div>
     </div>
+
+    
   );
 }
