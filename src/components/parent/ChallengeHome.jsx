@@ -15,10 +15,12 @@ function olderSquadUsesGps(squadKey = "") {
 }
 
 function isRunActivity(activity) {
-  return (
-    activity.gps_preferred ||
-    activity.title.toLowerCase().includes("run") ||
-    activity.target_unit === "km"
+  const title = String(activity?.title || "").toLowerCase();
+
+  return Boolean(
+    activity?.gps_preferred ||
+    title.includes("run") ||
+    activity?.target_unit === "km"
   );
 }
 
@@ -87,6 +89,34 @@ function levelFromXp(xp) {
   return Math.max(1, Math.floor(Number(xp || 0) / 100) + 1);
 }
 
+function suggestionIcon(activity) {
+  if (!activity) return "⭐";
+  if (activity.activity_key === "running-technique") return "🏃";
+  if (activity.activity_key === "football-skill") return "⚽";
+  if (activity.activity_key === "hurling-skill") return "🏑";
+  if (activity.activity_key === "recovery") return "🩵";
+  if (activity.activity_key === "squad-session") return "🤝";
+  if (isRunActivity(activity)) return "🏃";
+  return "🔥";
+}
+
+function dailySuggestionIndex(length, playerId, week) {
+  if (!length) return 0;
+
+  const today = new Date();
+  const dateKey = Number(
+    `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
+      today.getDate()
+    ).padStart(2, "0")}`
+  );
+
+  const playerSeed = String(playerId || "")
+    .split("")
+    .reduce((total, character) => total + character.charCodeAt(0), 0);
+
+  return (dateKey + playerSeed + Number(week || 1)) % length;
+}
+
 
 const RECOVERY_STRETCHES = {
   1: {
@@ -135,6 +165,55 @@ function recoveryStretchForWeek(week) {
   return RECOVERY_STRETCHES[Number(week)] || RECOVERY_STRETCHES[1];
 }
 
+function dateKey(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calculateDailyStreak(completions = [], savedRuns = []) {
+  const activeDays = new Set();
+
+  completions.forEach(item => {
+    const key = dateKey(item.completed_at || item.created_at);
+    if (key) activeDays.add(key);
+  });
+
+  savedRuns.forEach(item => {
+    const key = dateKey(item.saved_at || item.created_at);
+    if (key) activeDays.add(key);
+  });
+
+  if (!activeDays.size) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const todayKey = dateKey(today);
+  const yesterdayKey = dateKey(yesterday);
+  let cursor;
+
+  if (activeDays.has(todayKey)) {
+    cursor = today;
+  } else if (activeDays.has(yesterdayKey)) {
+    cursor = yesterday;
+  } else {
+    return 0;
+  }
+
+  let streak = 0;
+  while (activeDays.has(dateKey(cursor))) {
+    streak += 1;
+    cursor = new Date(cursor);
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
 export default function ChallengeHome({
   supabase,
   squadConfig,
@@ -170,10 +249,14 @@ export default function ChallengeHome({
   const [openSkillCard, setOpenSkillCard] = useState(null);
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
+  const [showChallengeCompleteModal, setShowChallengeCompleteModal] = useState(false);
+  const [showStreakInfo, setShowStreakInfo] = useState(false);
 
-  const safeWeek = lockFutureWeeks
+  const requestedWeek = lockFutureWeeks
     ? Math.min(Number(activeWeek || currentWeek), currentWeek)
     : Math.max(1, Number(activeWeek || currentWeek));
+
+  const safeWeek = Math.min(8, requestedWeek);
 
   const nextWeekLocked = lockFutureWeeks && safeWeek >= currentWeek;
   const isFutureWeek = safeWeek > currentWeek;
@@ -208,6 +291,10 @@ export default function ChallengeHome({
 
     setCompletionBurst(burst);
     setShowConfetti(true);
+
+    if (isChallengeComplete) {
+      setShowChallengeCompleteModal(true);
+    }
 
     setTimeout(() => setShowConfetti(false), isWeekComplete || isChallengeComplete ? 1800 : 1300);
     setTimeout(() => setCompletionBurst(null), isWeekComplete || isChallengeComplete ? 2100 : 1600);
@@ -310,6 +397,35 @@ export default function ChallengeHome({
   const completedCount = approvedCount + awaitingCount;
   const totalMissions = missionActivities.length || 1;
 
+  const incompleteActivities = missionActivities.filter(activity => {
+    const completion = completionFor(activity.id, completions);
+    const savedRun = runForActivity(activity);
+    return !completion && !savedRun;
+  });
+
+  const refresherCandidates = missionActivities.filter(activity =>
+    ["running-technique", "football-skill", "hurling-skill", "recovery"].includes(
+      activity.activity_key
+    )
+  );
+
+  const isRefresherSuggestion = incompleteActivities.length === 0;
+  const suggestionPool = isRefresherSuggestion
+    ? refresherCandidates.length
+      ? refresherCandidates
+      : missionActivities
+    : incompleteActivities;
+
+  const suggestedActivity = suggestionPool.length
+    ? suggestionPool[
+        dailySuggestionIndex(
+          suggestionPool.length,
+          selectedPlayer?.id,
+          safeWeek
+        )
+      ]
+    : null;
+
   const approvedPercent = Math.min(
     100,
     Math.round((approvedCount / totalMissions) * 100)
@@ -323,7 +439,35 @@ export default function ChallengeHome({
   const progressPercent = approvedPercent;
 
   const currentWeekRuns = savedRuns.filter(run => Number(run.week || 1) === safeWeek);
-  const dayStreak = Math.min(5, Math.max(0, completedCount));
+  const totalDistanceKm = savedRuns.reduce(
+    (total, run) => total + Number(run.distance_km || 0),
+    0
+  );
+  const dayStreak = calculateDailyStreak(completions, savedRuns);
+
+  function scrollToSuggestedActivity(activity) {
+    if (!activity) return;
+
+    const activityElement = document.getElementById(`activity-${activity.id}`);
+    const sectionElement = document.getElementById(
+      activity.activity_key === "fitness"
+        ? "weekly-fitness-section"
+        : ["running-technique", "football-skill", "hurling-skill"].includes(
+              activity.activity_key
+            )
+          ? "skill-challenges-section"
+          : activity.activity_key === "squad-session"
+            ? "squad-session-section"
+            : activity.activity_key === "recovery"
+              ? "recovery-section"
+              : "weekly-fitness-section"
+    );
+
+    (activityElement || sectionElement)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }
 
   const squadCompletion = squadSession
     ? completionFor(squadSession.id, completions)
@@ -408,20 +552,53 @@ export default function ChallengeHome({
         </div>
 
         <button
-          disabled={nextWeekLocked && !showLockedWeekToast}
-          className={nextWeekLocked ? "week-nav-disabled" : ""}
+          disabled={(safeWeek >= 8 || nextWeekLocked) && !showLockedWeekToast}
+          className={safeWeek >= 8 || nextWeekLocked ? "week-nav-disabled" : ""}
           onClick={() => {
+            if (safeWeek >= 8) {
+              showToast("🏆 The Summer Challenge finishes at Week 8.");
+              return;
+            }
+
             if (nextWeekLocked) {
               showToast("🔒 Week not available yet. Check back next week!");
               return;
             }
 
-            onChangeWeek?.(safeWeek + 1);
+            onChangeWeek?.(Math.min(8, safeWeek + 1));
           }}
         >
           ›
         </button>
       </section>
+
+      {suggestedActivity ? (
+        <section className={`today-mission-card ${isRefresherSuggestion ? "is-refresher" : ""}`}>
+          <div className="today-mission-icon">{suggestionIcon(suggestedActivity)}</div>
+
+          <div className="today-mission-copy">
+            <span>{isRefresherSuggestion ? "Today’s Refresher" : "Today’s Mission"}</span>
+            <h2>{displaySquadText(suggestedActivity.title, squadConfig.key)}</h2>
+            <p>
+              {isRefresherSuggestion
+                ? "Everything for this week is complete — revisit this skill for a little extra practice. No extra XP is awarded."
+                : "A good activity to tackle next. Tap below and we’ll take you straight to it."}
+            </p>
+
+            {isRefresherSuggestion ? (
+              <small>✓ Already completed · refresher only</small>
+            ) : null}
+          </div>
+
+          <button
+            type="button"
+            className="today-mission-button"
+            onClick={() => scrollToSuggestedActivity(suggestedActivity)}
+          >
+            {isRefresherSuggestion ? "Practise Again" : "Go to Mission"}
+          </button>
+        </section>
+      ) : null}
 
       {isFutureWeek ? (
         <section className="future-week-lock-card">
@@ -461,13 +638,18 @@ export default function ChallengeHome({
                 </div>
               </div>
 
-              <div className="mission-snapshot-stat">
+              <button
+                type="button"
+                className="mission-snapshot-stat mission-streak-button"
+                onClick={() => setShowStreakInfo(true)}
+                aria-label="View streak information"
+              >
                 <span className="stat-icon">🔥</span>
                 <div>
                   <strong>{dayStreak}</strong>
-                  <span>Day Streak</span>
+                  <span>Day Streak · Tap for info</span>
                 </div>
-              </div>
+              </button>
 
               <div className="mission-snapshot-stat">
                 <span className="stat-icon">🏃</span>
@@ -487,7 +669,7 @@ export default function ChallengeHome({
         </div>
       </section>
 
-      <section className="weekly-section fitness-section">
+      <section className="weekly-section fitness-section" id="weekly-fitness-section">
         <h2>🔥 Weekly Fitness Challenge</h2>
         <p className="muted">Complete all three challenges this week.</p>
 
@@ -502,6 +684,7 @@ export default function ChallengeHome({
             return (
               <button
                 key={item.id}
+                id={`activity-${item.id}`}
                 className={`fitness-pill ${done ? "is-complete" : ""}`}
                 onClick={() => {
                   if (isFutureWeek) {
@@ -559,7 +742,7 @@ export default function ChallengeHome({
         </div>
       </section>
 
-      <section className="weekly-section drills-section">
+      <section className="weekly-section drills-section" id="skill-challenges-section">
         <h2>🎥 Skill Challenges</h2>
         <p className="muted">Watch each video before practising.</p>
 
@@ -576,7 +759,7 @@ export default function ChallengeHome({
                   : "🏑";
 
             return (
-              <div className="drill-card" key={item.id}>
+              <div className="drill-card" id={`activity-${item.id}`} key={item.id}>
                 <div className="challenge-card-header">
                   <div className="challenge-icon">{icon}</div>
 
@@ -632,7 +815,7 @@ export default function ChallengeHome({
       </section>
 
       {squadSession && (
-        <section className="squad-session-card">
+        <section className="squad-session-card" id="squad-session-section">
           <button
             className="squad-session-toggle"
             onClick={() => setSquadOpen(!squadOpen)}
@@ -801,7 +984,7 @@ export default function ChallengeHome({
 
 
       {recoveryItems.length ? (
-        <section className="recovery-session-card">
+        <section className="recovery-session-card" id="recovery-section">
           {recoveryItems.slice(0, 1).map(item => {
             const done = completionFor(item.id, completions)?.status === "completed";
             const videoId = item.youtube_id;
@@ -814,7 +997,7 @@ export default function ChallengeHome({
             const stretch = recoveryStretchForWeek(safeWeek);
 
             return (
-              <div key={item.id}>
+              <div key={item.id} id={`activity-${item.id}`}>
                 <button
                   className="recovery-session-toggle"
                   type="button"
@@ -934,6 +1117,84 @@ export default function ChallengeHome({
             );
           })}
         </section>
+      ) : null}
+
+      {showChallengeCompleteModal ? (
+        <div
+          className="challenge-complete-backdrop"
+          onClick={() => setShowChallengeCompleteModal(false)}
+        >
+          <div
+            className="challenge-complete-modal"
+            onClick={event => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="challenge-complete-close"
+              onClick={() => setShowChallengeCompleteModal(false)}
+              aria-label="Close challenge celebration"
+            >
+              ×
+            </button>
+
+            <div className="challenge-complete-trophy">🏆</div>
+            <span className="challenge-complete-eyebrow">Eight weeks complete</span>
+            <h2>Congratulations, {selectedPlayer?.name || "Champion"}!</h2>
+            <p>
+              You completed the Fingallians Summer Fitness Challenge. Amazing effort,
+              practice and determination all summer!
+            </p>
+
+            <div className="challenge-complete-stats">
+              <div>
+                <strong>{xpTotal}</strong>
+                <span>Total XP</span>
+              </div>
+              <div>
+                <strong>{badges.length}</strong>
+                <span>Badges</span>
+              </div>
+              <div>
+                <strong>{totalDistanceKm.toFixed(2)} km</strong>
+                <span>Distance</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="button primary challenge-complete-button"
+              onClick={() => setShowChallengeCompleteModal(false)}
+            >
+              Finish Celebration 🎉
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {showStreakInfo ? (
+        <div className="streak-info-backdrop" onClick={() => setShowStreakInfo(false)}>
+          <div className="streak-info-modal" onClick={event => event.stopPropagation()}>
+            <button
+              type="button"
+              className="streak-info-close"
+              onClick={() => setShowStreakInfo(false)}
+              aria-label="Close streak information"
+            >
+              ×
+            </button>
+            <span className="streak-info-icon">🔥</span>
+            <h2>{dayStreak ? `${dayStreak}-Day Streak` : "Start Your Streak"}</h2>
+            <p>Complete any activity or save a run on consecutive days to build your streak.</p>
+            <div className="streak-info-tip">
+              {dayStreak
+                ? "Come back tomorrow and complete one activity to keep it going."
+                : "Complete one activity today to begin."}
+            </div>
+            <button type="button" className="button primary" onClick={() => setShowStreakInfo(false)}>
+              Got it
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {showBadges ? (

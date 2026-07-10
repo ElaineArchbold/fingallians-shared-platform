@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import "./styles/app.css";
 import ChildHome from "./components/child/ChildHome";
 
@@ -26,7 +26,6 @@ const SINGLE_SQUAD_ADMIN_EMAILS = {
   "lee@ssa.ie": ["2017-girls"],
 };
 
-
 function NavIcon({ name }) {
   if (name === "home") {
     return (
@@ -44,6 +43,14 @@ function NavIcon({ name }) {
     );
   }
 
+if (name === "skills") {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3a2 2 0 0 0-2 2v16l7-4 7 4V5a2 2 0 0 0-2-2H7Z" />
+    </svg>
+  );
+}
+
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 12.2a4.7 4.7 0 1 0 0-9.4 4.7 4.7 0 0 0 0 9.4Zm0 2.1c-4.2 0-7.7 2.4-7.7 5.3V21h15.4v-1.4c0-2.9-3.5-5.3-7.7-5.3Z" />
@@ -52,6 +59,40 @@ function NavIcon({ name }) {
 }
 
 
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("App render failed", error, info);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <div className="app-shell">
+        <div className="card app-error-card">
+          <span>⚠️</span>
+          <h2>Something went wrong</h2>
+          <p className="muted">
+            The page could not be displayed. Reload the app to try again.
+          </p>
+          <button className="button primary" onClick={() => window.location.reload()}>
+            Reload App
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 function getChildLinkParams() {
   const params = new URLSearchParams(window.location.search);
   const pathMatch = window.location.pathname.match(/^\/child\/([^/]+)$/);
@@ -59,9 +100,7 @@ function getChildLinkParams() {
   const tokenFromQuery = params.get("child") || "";
   const childToken = tokenFromPath || tokenFromQuery;
 
-  if (childToken) {
-    localStorage.setItem("childAccessToken", childToken);
-  }
+  if (childToken) localStorage.setItem("childAccessToken", childToken);
 
   return {
     childToken,
@@ -69,18 +108,14 @@ function getChildLinkParams() {
   };
 }
 
-export default function App() {
+function AppContent() {
   const { childToken, squadFromUrl } = getChildLinkParams();
   const childMode = Boolean(childToken);
-
   const { squadKey, squadConfig, setSquadKey } = useSquadSelection();
 
   useEffect(() => {
     document.body.classList.toggle("is-child-link-mode", childMode);
-
-    return () => {
-      document.body.classList.remove("is-child-link-mode");
-    };
+    return () => document.body.classList.remove("is-child-link-mode");
   }, [childMode]);
 
   useEffect(() => {
@@ -92,11 +127,7 @@ export default function App() {
 
   const { session, authLoaded } = useAuth(supabase);
   const { roles, rolesLoaded } = useRoles(supabase, session);
-  const { players, playersLoaded } = useLinkedPlayers(
-    supabase,
-    session,
-    squadConfig
-  );
+  const { players, playersLoaded } = useLinkedPlayers(supabase, session, squadConfig);
   const { termsAccepted, termsAcceptedAt, termsLoaded } = useTermsAcceptance(
     supabase,
     session,
@@ -112,9 +143,6 @@ export default function App() {
   const isEmailSuperAdmin = SUPER_ADMIN_EMAILS.includes(userEmail);
   const isTestSquadAdmin = TEST_SQUAD_ADMIN_EMAILS.includes(userEmail);
   const effectiveIsSuperAdmin = isSuperAdmin || isEmailSuperAdmin;
-
-  // Super admin can see All Squads and switch squads.
-  // Normal/test squad admins only see the single selected squad dashboard.
   const singleSquadAdminKeys = SINGLE_SQUAD_ADMIN_EMAILS[userEmail] || [];
 
   const availableAdminKeys = effectiveIsSuperAdmin
@@ -130,22 +158,13 @@ export default function App() {
     effectiveIsSuperAdmin ||
     isTestSquadAdmin ||
     singleSquadAdminKeys.includes(squadKey);
-  const canUseAdminSelector = effectiveIsSuperAdmin && availableAdminKeys.length > 1;
 
   async function signOut() {
     const ok = window.confirm("Are you sure you want to sign out?");
     if (!ok) return;
-
     await supabase.auth.signOut();
     setSelectedPlayerId("");
     setParentView("challenge");
-  }
-
-  function changeSquad(next) {
-    setSelectedPlayerId("");
-    setParentView("challenge");
-    setSquadKey(next);
-    localStorage.setItem("lastSquadKey", next);
   }
 
   if (childMode) {
@@ -154,19 +173,10 @@ export default function App() {
         <div className="topbar child-topbar">
           <div className="topbar-brand">
             <img src="/fingallians-crest.png" alt="Fingallians crest" />
-
-            <div className="topbar-title">
-              <h1>Fingallians Fitness Challenge</h1>
-            </div>
+            <div className="topbar-title"><h1>Fingallians Fitness Challenge</h1></div>
           </div>
         </div>
-
-        <ChildHome
-          key={childToken}
-          supabase={supabase}
-          squadConfig={squadConfig}
-          childToken={childToken}
-        />
+        <ChildHome key={childToken} supabase={supabase} squadConfig={squadConfig} childToken={childToken} />
       </div>
     );
   }
@@ -177,11 +187,7 @@ export default function App() {
   const waitingForPlayers = Boolean(session && rolesLoaded && !isAdmin && !playersLoaded);
 
   if (waitingForAuth || waitingForRoles || waitingForTerms || waitingForPlayers) {
-    return (
-      <div className="app-shell">
-        <div className="card">Loading…</div>
-      </div>
-    );
+    return <div className="app-shell"><div className="card">Loading…</div></div>;
   }
 
   return (
@@ -191,46 +197,13 @@ export default function App() {
           <div className="topbar">
             <div className="topbar-brand">
               <img src="/fingallians-crest.png" alt="Fingallians crest" />
-
-              <div className="topbar-title">
-                <h1>Fingallians Fitness Challenge</h1>
-              </div>
+              <div className="topbar-title"><h1>Fingallians Fitness Challenge</h1></div>
             </div>
-
-            {isAdmin ? (
-              <div className="topbar-actions admin-topbar-actions">
-                {canUseAdminSelector ? (
-                  <select
-                    className="select topbar-select"
-                    value={squadKey}
-                    onChange={e => changeSquad(e.target.value)}
-                  >
-                    {availableAdminKeys.map(key => (
-                      <option key={key} value={key}>
-                        {key}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-
-                <button
-                  className="admin-signout-link"
-                  onClick={signOut}
-                >
-                  Sign out
-                </button>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
         {session && !isAdmin && !termsAccepted ? (
-          <TermsAndConditions
-            supabase={supabase}
-            session={session}
-            squadConfig={squadConfig}
-            onAccepted={() => window.location.reload()}
-          />
+          <TermsAndConditions supabase={supabase} session={session} squadConfig={squadConfig} onAccepted={() => window.location.reload()} />
         ) : null}
 
         {!session ? (
@@ -270,31 +243,29 @@ export default function App() {
 
       {!isAdmin && session && termsAccepted ? (
         <nav className="bottom-nav">
-          <button
-            className={parentView === "challenge" ? "active" : ""}
-            onClick={() => setParentView("challenge")}
-          >
-            <NavIcon name="home" />
-            <small>Home</small>
+          <button className={parentView === "challenge" ? "active" : ""} onClick={() => setParentView("challenge")}>
+            <NavIcon name="home" /><small>Home</small>
           </button>
-
-          <button
-            className={parentView === "progress" ? "active" : ""}
-            onClick={() => setParentView("progress")}
-          >
-            <NavIcon name="trophy" />
-            <small>Progress</small>
+          <button className={parentView === "progress" ? "active" : ""} onClick={() => setParentView("progress")}>
+            <NavIcon name="trophy" /><small>Progress</small>
           </button>
-
-          <button
-            className={parentView === "settings" ? "active" : ""}
-            onClick={() => setParentView("settings")}
-          >
-            <NavIcon name="user" />
-            <small>Settings</small>
+          <button className={parentView === "skills" ? "active" : ""} onClick={() => setParentView("skills")}>
+            <NavIcon name="skills" /><small>Skills</small>
+          </button>
+          <button className={parentView === "settings" ? "active" : ""} onClick={() => setParentView("settings")}>
+            <NavIcon name="user" /><small>Settings</small>
           </button>
         </nav>
       ) : null}
     </>
+  );
+}
+
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <AppContent />
+    </AppErrorBoundary>
   );
 }

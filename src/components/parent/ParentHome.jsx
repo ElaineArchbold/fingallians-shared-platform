@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import ChallengeHome from "./ChallengeHome";
 import ProgressHome from "./ProgressHome";
 import SettingsHome from "./SettingsHome";
+import SkillsLibrary from "./SkillsLibrary";
 import RunLoggerModal from "./RunLoggerModal";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
 import { playActivityComplete } from "../../lib/sounds";
@@ -1087,6 +1088,21 @@ export default function ParentHome({
         badges={badges}
         onOpenWeek={openWeekFromProgress}
       />
+        {renderChildSwitcherModal()}
+      </>
+    );
+  }
+
+  if (parentView === "skills") {
+    return (
+      <>
+        <SkillsLibrary
+          supabase={supabase}
+          squadConfig={squadConfig}
+          selectedPlayer={selectedPlayer}
+          hasMultipleChildren={(allLinkedPlayers.length || localPlayers.length) > 1}
+          onSwitchChild={() => setShowChildSwitcher(true)}
+        />
         {renderChildSwitcherModal()}
       </>
     );

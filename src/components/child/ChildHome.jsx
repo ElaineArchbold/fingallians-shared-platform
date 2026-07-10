@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ChallengeHome from "../parent/ChallengeHome";
 import RunLoggerModal from "../parent/RunLoggerModal";
+import SkillsLibrary from "../parent/SkillsLibrary";
 import { useAllWeeklyActivities } from "../../hooks/useWeeklyActivities";
 import { playActivityComplete } from "../../lib/sounds";
 import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
@@ -64,6 +65,7 @@ export default function ChildHome({
   const [completions, setCompletions] = useState([]);
   const [xpTotal, setXpTotal] = useState(0);
   const [badges, setBadges] = useState([]);
+  const [childView, setChildView] = useState("challenge");
 
   const childSquadConfig = useMemo(
     () => getSquadConfigFromPlayer(player, squadConfig),
@@ -595,11 +597,28 @@ export default function ChildHome({
     );
   }
 
+  if (childView === "skills") {
+    return (
+      <SkillsLibrary
+        supabase={supabase}
+        squadConfig={childSquadConfig}
+        selectedPlayer={player}
+        hasMultipleChildren={false}
+        onBack={() => setChildView("challenge")}
+      />
+    );
+  }
+
   return (
     <div className="page">
-      <button className="child-parent-return-link" type="button" onClick={returnToParentView}>
-        ← Parent view
-      </button>
+      <div className="child-home-action-row">
+        <button className="child-parent-return-link" type="button" onClick={returnToParentView}>
+          ← Parent view
+        </button>
+        <button className="child-skills-library-button" type="button" onClick={() => setChildView("skills")}>
+          📚 Skills Library
+        </button>
+      </div>
 
       <ChallengeHome
         supabase={supabase}
