@@ -23,7 +23,10 @@ function isRunActivity(activity) {
 }
 
 function isApprovalActivity(activity) {
-  return activity?.activity_key === "squad-session" || activity?.activity_key === "bonus";
+  return (
+    activity?.activity_key === "squad-session" ||
+    activity?.activity_key === "bonus"
+  );
 }
 
 function activityIcon(activity) {
@@ -34,7 +37,6 @@ function activityIcon(activity) {
   if (activity?.activity_key === "squad-session") return "🤝";
   if (activity?.activity_key === "bonus") return "⭐";
   if (activity?.activity_key === "recovery") return "🧘";
-  if (activity?.activity_key === "recovery") return "🧘";
   return "🎯";
 }
 
@@ -43,7 +45,11 @@ function completionFor(activityId, completions = []) {
 }
 
 function runFor(activityId, runs = []) {
-  return runs.find(row => String(row.task_key || row.activity_id) === String(activityId)) || null;
+  return (
+    runs.find(
+      row => String(row.task_key || row.activity_id) === String(activityId)
+    ) || null
+  );
 }
 
 function approvalLabel(activity) {
@@ -67,18 +73,34 @@ export default function CoachPlayerView({
   onRemoveActivity,
   onApproveActivity,
 }) {
-  const safeWeek = Math.max(1, Number(week || currentWeek || 1));
-  const isFutureWeek = safeWeek > Number(currentWeek || 1);
+  const cappedCurrentWeek = Math.min(
+    8,
+    Math.max(1, Number(currentWeek || 1))
+  );
+
+  const safeWeek = Math.min(
+    8,
+    Math.max(1, Number(week || cappedCurrentWeek))
+  );
+
+  const isFutureWeek = safeWeek > cappedCurrentWeek;
 
   const weekActivities = activities
-    .filter(activity => Number(activity.week_number || 1) === safeWeek)
+    .filter(activity => {
+      const activityWeek = Number(activity.week_number || 1);
+
+      return (
+        activityWeek >= 1 &&
+        activityWeek <= 8 &&
+        activityWeek === safeWeek
+      );
+    })
     .sort((a, b) => {
       const order = {
         fitness: 10,
         "running-technique": 20,
         "football-skill": 30,
         "hurling-skill": 40,
-        recovery: 45,
         recovery: 45,
         "squad-session": 50,
         bonus: 60,
@@ -109,9 +131,11 @@ export default function CoachPlayerView({
         <div>
           <h2>{player.name}</h2>
           <p>{squadLabel}</p>
+
           <div className="coach-player-xp-track">
             <div style={{ width: `${Math.min(100, xpTotal % 100)}%` }} />
           </div>
+
           <small>{xpTotal} XP · {badges.length} badges</small>
         </div>
 
@@ -122,17 +146,23 @@ export default function CoachPlayerView({
         <button
           type="button"
           disabled={safeWeek <= 1}
-          onClick={() => onChangeWeek?.(safeWeek - 1)}
+          onClick={() => onChangeWeek?.(Math.max(1, safeWeek - 1))}
         >
           ‹
         </button>
 
         <div>
           <strong>Week {safeWeek}</strong>
-          <span>{safeWeek === currentWeek ? "Current week" : "Coach view"}</span>
+          <span>
+            {safeWeek === cappedCurrentWeek ? "Current week" : "Coach view"}
+          </span>
         </div>
 
-        <button type="button" onClick={() => onChangeWeek?.(safeWeek + 1)}>
+        <button
+          type="button"
+          disabled={safeWeek >= 8}
+          onClick={() => onChangeWeek?.(Math.min(8, safeWeek + 1))}
+        >
           ›
         </button>
       </section>
@@ -140,14 +170,20 @@ export default function CoachPlayerView({
       {isFutureWeek ? (
         <section className="coach-future-lock-card">
           <strong>🔒 Week {safeWeek} is locked for now</strong>
-          <span>You can preview it, but you cannot add/remove completions until the week starts.</span>
+          <span>
+            You can preview it, but you cannot add or remove completions
+            until the week starts.
+          </span>
         </section>
       ) : null}
 
       <section className="coach-activity-panel">
         <div className="coach-panel-title">
           <h3>Coach Actions</h3>
-          <p>Use Add/Approve/Complete to award points. Use Remove to undo anything.</p>
+          <p>
+            Use Add, Approve or Complete to award points. Use Remove to
+            undo anything.
+          </p>
         </div>
 
         <div className="coach-action-list">
@@ -175,7 +211,11 @@ export default function CoachPlayerView({
                   <span>{activityIcon(activity)}</span>
 
                   <div>
-                    <strong>{needsApproval ? approvalLabel(activity) : activity.title}</strong>
+                    <strong>
+                      {needsApproval
+                        ? approvalLabel(activity)
+                        : activity.title}
+                    </strong>
 
                     <small>
                       {savedRun

@@ -21,6 +21,7 @@ const ADMIN_TABS = [
   { key: "players", label: "Players", icon: "👧" },
   { key: "plans", label: "Plans", icon: "🗓️" },
   { key: "leaderboard", label: "Leaderboard", icon: "🏆" },
+  { key: "testing", label: "Testing", icon: "🧪", superAdminOnly: true },
   { key: "migration", label: "Audit Log", icon: "🧾", superAdminOnly: true },
 ];
 
@@ -216,10 +217,22 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     ? SQUADS
     : SQUADS.filter(item => item.key !== "all" && (adminSquadKeys.length ? adminSquadKeys.includes(item.key) : item.key === squadConfig.key));
 
+  const accessiblePlayers = useMemo(
+    () => (isSuperAdmin ? players : players.filter(player => !player.is_test_player)),
+    [players, isSuperAdmin]
+  );
+
   const filteredPlayers = useMemo(() => {
-    if (adminSquad === "all") return players;
-    return players.filter(player => player.squad_key === adminSquad);
-  }, [players, adminSquad]);
+    if (adminSquad === "all") return accessiblePlayers;
+    return accessiblePlayers.filter(player => player.squad_key === adminSquad);
+  }, [accessiblePlayers, adminSquad]);
+
+  // Test players remain visible to SuperAdmin in the Players tab,
+  // but they never contribute to dashboards, totals or leaderboards.
+  const reportingPlayers = useMemo(
+    () => filteredPlayers.filter(player => !player.is_test_player),
+    [filteredPlayers]
+  );
 
   const searchedFilteredPlayers = useMemo(() => {
     const search = playerSearch.trim().toLowerCase();
@@ -233,7 +246,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }, [filteredPlayers, playerSearch]);
 
-  const filteredIds = useMemo(() => new Set(filteredPlayers.map(player => player.id)), [filteredPlayers]);
+  const filteredIds = useMemo(
+    () => new Set(reportingPlayers.map(player => player.id)),
+    [reportingPlayers]
+  );
 
   const filteredCompletions = completions.filter(row => filteredIds.has(row.player_id));
   const filteredXpRows = xpRows.filter(row => filteredIds.has(row.player_id));
@@ -241,11 +257,11 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const filteredBadges = badges.filter(row => filteredIds.has(row.player_id));
   const filteredTerms = termsRows.filter(row => adminSquad === "all" || row.squad_key === adminSquad);
 
-  const myChildren = players
+  const myChildren = accessiblePlayers
     .filter(player => myChildIds.includes(player.id))
     .sort((a, b) => `${a.squad_key}-${a.name}`.localeCompare(`${b.squad_key}-${b.name}`));
 
-  const myChildAvailablePlayers = players
+  const myChildAvailablePlayers = accessiblePlayers
     .filter(player => !myChildIds.includes(player.id))
     .filter(player => !myChildSquadKey || player.squad_key === myChildSquadKey)
     .sort((a, b) => `${a.squad_key}-${a.name}`.localeCompare(`${b.squad_key}-${b.name}`));
@@ -381,7 +397,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
   const pendingApprovals = filteredCompletions.filter(row => isPendingApproval(row) && isApprovalType(row));
 
-  const leaderboard = filteredPlayers
+  const leaderboard = reportingPlayers
     .map(player => {
       const xp = filteredXpRows
         .filter(row => row.player_id === player.id)
@@ -409,7 +425,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     .sort((a, b) => b.xp - a.xp || b.completed - a.completed || a.player.name.localeCompare(b.player.name));
 
   const squadStats = SQUADS.filter(item => item.key !== "all").map(squad => {
-    const squadPlayers = players.filter(player => player.squad_key === squad.key);
+    const squadPlayers = players.filter(
+      player => player.squad_key === squad.key && !player.is_test_player
+    );
     const ids = new Set(squadPlayers.map(player => player.id));
     const squadCompletions = completions.filter(row => ids.has(row.player_id));
     const squadRuns = runs.filter(row => ids.has(row.player_id));
@@ -433,6 +451,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   });
 
   const planActivities = activities
+    .filter(activity => Number(activity.week_number || 1) >= 1 && Number(activity.week_number || 1) <= 8)
     .filter(activity => adminSquad === "all" || activity.squad_key === adminSquad)
     .filter(activity => Number(activity.week_number || 1) === Number(planWeek))
     .sort((a, b) =>
@@ -613,7 +632,13 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       supabase.from("xp_transactions").select("*").order("created_at", { ascending: false }),
       supabase.from("run_proofs").select("*").order("saved_at", { ascending: false }),
       supabase.from("player_badges").select("*").order("earned_at", { ascending: false }),
-      supabase.from("weekly_activities").select("*").order("week_number").order("section"),
+      supabase
+        .from("weekly_activities")
+        .select("*")
+        .gte("week_number", 1)
+        .lte("week_number", 8)
+        .order("week_number")
+        .order("section"),
       supabase.from("terms_acceptances").select("*").order("accepted_at", { ascending: false }),
       isSuperAdmin
         ? supabase.from("migration_audit").select("*").order("created_at", { ascending: false }).limit(250)
@@ -629,7 +654,9 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     if (termsResult.error) console.error(termsResult.error);
     if (migrationResult.error) console.error(migrationResult.error);
 
-    setPlayers(playerResult.data || []);
+    setPlayers(
+      (playerResult.data || []).filter(player => isSuperAdmin || !player.is_test_player)
+    );
     setCompletions(completionResult.data || []);
     setXpRows(xpResult.data || []);
     setRuns(runResult.data || []);
@@ -1026,7 +1053,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
         <div className="admin-stat-grid">
           <button className="admin-stat-card" onClick={() => setDetailModal("registered")}>
             <span>👧</span>
-            <strong>{filteredPlayers.length}</strong>
+            <strong>{reportingPlayers.length}</strong>
             <small>Registered</small>
           </button>
 
@@ -1306,7 +1333,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
                   <button key={player.id} className="admin-player-row" onClick={() => setSelectedPlayer(player)}>
                     <span>{initials(player.name)}</span>
                     <div>
-                      <strong>{player.name}</strong>
+                      <strong>
+                        {player.name}
+                        {player.is_test_player ? " · TEST" : ""}
+                      </strong>
                       <small>
                         {displaySquad(player.squad_key)} · {playerXp} XP · {playerDistance.toFixed(1)} km
                       </small>
@@ -1366,7 +1396,7 @@ function renderPlayerDrawer(player) {
         <div className="admin-adjust-card">
           <h3>Coach Actions</h3>
 
-          <button className="button primary" onClick={() => { setCoachPlayer(player); setCoachWeek(currentChallengeWeek); }}>
+          <button className="button primary" onClick={() => { setCoachPlayer(player); setCoachWeek(Math.min(8, Math.max(1, currentChallengeWeek))); }}>
             View / Edit as Player
           </button>
 
@@ -1666,7 +1696,7 @@ function renderPlayerDrawer(player) {
                       type="button"
                       onClick={() => {
                         setCoachPlayer(player);
-                        setCoachWeek(currentChallengeWeek);
+                        setCoachWeek(Math.min(8, Math.max(1, currentChallengeWeek)));
                         writeAdminAudit("admin_viewed_own_child", { source: "admin_my_children" }, player);
                       }}
                     >
@@ -1928,6 +1958,95 @@ function renderPlayerDrawer(player) {
               <p className="muted">No audit events match this filter yet.</p>
             )}
           </div>
+        </section>
+      </div>
+    );
+  }
+
+  async function ensureChildAccessToken(player) {
+    if (player?.child_access_token) return player.child_access_token;
+
+    const token = crypto.randomUUID();
+    const { data, error } = await supabase
+      .from("players")
+      .update({ child_access_token: token })
+      .eq("id", player.id)
+      .eq("is_test_player", true)
+      .select("child_access_token")
+      .single();
+
+    if (error) throw error;
+    await loadAdminData();
+    return data?.child_access_token || token;
+  }
+
+  async function openTestChildView(player) {
+    try {
+      const token = await ensureChildAccessToken(player);
+      const url = `${window.location.origin}/child/${encodeURIComponent(token)}?squad=${encodeURIComponent(player.squad_key)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      alert(error?.message || "Could not create the child preview link.");
+    }
+  }
+
+  function openTestParentView(player) {
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set("previewMode", "parent");
+    url.searchParams.set("previewPlayer", player.id);
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+  }
+
+  function renderTesting() {
+    if (!isSuperAdmin) return null;
+
+    const testPlayers = players.filter(player => player.is_test_player);
+
+    return (
+      <div className="admin-panel">
+        <section className="admin-card testing-centre-card">
+          <div className="testing-centre-heading">
+            <span>🧪</span>
+            <div>
+              <h2>Testing Centre</h2>
+              <p className="muted">Open the real child or parent experience using an isolated test player.</p>
+            </div>
+          </div>
+
+          {testPlayers.length ? (
+            <div className="testing-player-grid">
+              {testPlayers.map(player => (
+                <article className="testing-player-card" key={player.id}>
+                  <div className="testing-player-head">
+                    <span>{initials(player.name)}</span>
+                    <div>
+                      <strong>{player.name}</strong>
+                      <small>{displaySquad(player.squad_key)} · Test data excluded from totals</small>
+                    </div>
+                    <em>TEST</em>
+                  </div>
+
+                  <div className="testing-launch-grid">
+                    <button className="button primary" type="button" onClick={() => openTestChildView(player)}>
+                      Open Child View
+                    </button>
+                    <button className="button secondary" type="button" onClick={() => openTestParentView(player)}>
+                      Open Parent View
+                    </button>
+                    <button className="button secondary" type="button" onClick={() => { setCoachPlayer(player); setCoachWeek(8); }}>
+                      Open Coach View
+                    </button>
+                  </div>
+
+                  <p className="testing-safety-note">
+                    This player remains visible to SuperAdmin only and does not count towards squad leaderboards, XP, distance or activity totals.
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No test players found. Create a player with is_test_player set to true.</p>
+          )}
         </section>
       </div>
     );
@@ -2224,7 +2343,7 @@ function renderPlayerDrawer(player) {
 
     if (detailModal === "registered") {
       title = "Registered Players";
-      rows = filteredPlayers.map(player => ({
+      rows = reportingPlayers.map(player => ({
         main: player.name,
         sub: displaySquad(player.squad_key),
       }));
@@ -2232,7 +2351,7 @@ function renderPlayerDrawer(player) {
 
     if (detailModal === "active") {
       title = "Active Players";
-      rows = filteredPlayers
+      rows = reportingPlayers
         .filter(player => activePlayerIds.has(player.id))
         .map(player => ({
           main: player.name,
@@ -2584,7 +2703,10 @@ function renderPlayerDrawer(player) {
     const playerXp = playerXpFor(coachPlayer);
     const playerBadges = badges.filter(row => row.player_id === coachPlayer.id);
     const playerActivities = activities.filter(
-      activity => activity.squad_key === coachPlayer.squad_key
+      activity =>
+        activity.squad_key === coachPlayer.squad_key &&
+        Number(activity.week_number || 1) >= 1 &&
+        Number(activity.week_number || 1) <= 8
     );
 
     return (
@@ -2652,6 +2774,7 @@ function renderPlayerDrawer(player) {
     if (activeTab === "players") return renderPlayers();
     if (activeTab === "plans") return renderPlans();
     if (activeTab === "leaderboard") return renderLeaderboard();
+    if (activeTab === "testing") return renderTesting();
     if (activeTab === "migration") return renderMigration();
     return renderOverview();
   }

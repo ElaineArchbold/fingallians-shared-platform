@@ -4,6 +4,7 @@ import { getCurrentChallengeWeek } from "../../lib/challengeWeeks";
 import SkillCardModal from "./SkillCardModal";
 import RunProofModal from "./RunProofModal";
 import MyBadgesModal from "./MyBadgesModal";
+import ChallengeCertificateModal from "./ChallengeCertificateModal";
 
 
 function isGirlsSquad(squadKey = "") {
@@ -15,12 +16,10 @@ function olderSquadUsesGps(squadKey = "") {
 }
 
 function isRunActivity(activity) {
-  const title = String(activity?.title || "").toLowerCase();
-
-  return Boolean(
-    activity?.gps_preferred ||
-    title.includes("run") ||
-    activity?.target_unit === "km"
+  return (
+    activity.gps_preferred ||
+    activity.title.toLowerCase().includes("run") ||
+    activity.target_unit === "km"
   );
 }
 
@@ -250,6 +249,7 @@ export default function ChallengeHome({
   const [selectedRunProof, setSelectedRunProof] = useState(null);
   const [showBadges, setShowBadges] = useState(false);
   const [showChallengeCompleteModal, setShowChallengeCompleteModal] = useState(false);
+  const [showCertificate, setShowCertificate] = useState(false);
   const [showStreakInfo, setShowStreakInfo] = useState(false);
 
   const requestedWeek = lockFutureWeeks
@@ -259,7 +259,7 @@ export default function ChallengeHome({
   const safeWeek = Math.min(8, requestedWeek);
 
   const nextWeekLocked = lockFutureWeeks && safeWeek >= currentWeek;
-  const isFutureWeek = safeWeek > currentWeek;
+  const isFutureWeek = lockFutureWeeks && safeWeek > currentWeek;
 
   const { activities, activitiesLoaded } = useWeeklyActivities(
     supabase,
@@ -444,6 +444,15 @@ export default function ChallengeHome({
     0
   );
   const dayStreak = calculateDailyStreak(completions, savedRuns);
+
+  const challengeComplete = Number(safeWeek) === 8 && completedCount >= totalMissions;
+  const challengeCompletionDate = missionActivities
+    .map(activity => completionFor(activity.id, completions))
+    .filter(Boolean)
+    .map(item => item.completed_at || item.created_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || new Date().toISOString();
 
   function scrollToSuggestedActivity(activity) {
     if (!activity) return;
@@ -1139,7 +1148,7 @@ export default function ChallengeHome({
 
             <div className="challenge-complete-trophy">🏆</div>
             <span className="challenge-complete-eyebrow">Eight weeks complete</span>
-            <h2>Congratulations, {selectedPlayer?.name || "Champion"}!</h2>
+            <h2>Congratulations, {selectedPlayer.name}!</h2>
             <p>
               You completed the Fingallians Summer Fitness Challenge. Amazing effort,
               practice and determination all summer!
@@ -1160,15 +1169,40 @@ export default function ChallengeHome({
               </div>
             </div>
 
-            <button
-              type="button"
-              className="button primary challenge-complete-button"
-              onClick={() => setShowChallengeCompleteModal(false)}
-            >
-              Finish Celebration 🎉
-            </button>
+            <div className="challenge-complete-actions">
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => {
+                  setShowChallengeCompleteModal(false);
+                  setShowCertificate(true);
+                }}
+              >
+                View Certificate
+              </button>
+
+              <button
+                type="button"
+                className="button primary challenge-complete-button"
+                onClick={() => setShowChallengeCompleteModal(false)}
+              >
+                Back to Home
+              </button>
+            </div>
           </div>
         </div>
+      ) : null}
+
+      {showCertificate ? (
+        <ChallengeCertificateModal
+          playerName={selectedPlayer?.name}
+          squadName={squadConfig?.shortLabel || squadConfig?.label || squadConfig?.key}
+          xpTotal={xpTotal}
+          badgeCount={badges.length}
+          distanceKm={totalDistanceKm}
+          completedAt={challengeCompletionDate}
+          onClose={() => setShowCertificate(false)}
+        />
       ) : null}
 
       {showStreakInfo ? (

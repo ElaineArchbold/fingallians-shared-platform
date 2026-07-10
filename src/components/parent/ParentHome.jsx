@@ -56,14 +56,16 @@ export default function ParentHome({
   onChangeParentView,
   onSignOut,
   termsAcceptedAt,
+  previewPlayer = null,
 }) {
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [linking, setLinking] = useState(false);
-  const [localPlayers, setLocalPlayers] = useState(players || []);
-  const [allLinkedPlayers, setAllLinkedPlayers] = useState(players || []);
+  const initialPlayers = previewPlayer ? [previewPlayer] : (players || []);
+  const [localPlayers, setLocalPlayers] = useState(initialPlayers);
+  const [allLinkedPlayers, setAllLinkedPlayers] = useState(initialPlayers);
   const currentWeek = getCurrentChallengeWeek();
-  const [challengeWeek, setChallengeWeek] = useState(currentWeek);
+  const [challengeWeek, setChallengeWeek] = useState(Math.min(8, Math.max(1, currentWeek)));
   const [runActivity, setRunActivity] = useState(null);
   const [savedRuns, setSavedRuns] = useState([]);
   const [completions, setCompletions] = useState([]);
@@ -81,12 +83,15 @@ export default function ParentHome({
     null;
 
   useEffect(() => {
-    setLocalPlayers(players || []);
-  }, [players]);
+    const nextPlayers = previewPlayer ? [previewPlayer] : (players || []);
+    setLocalPlayers(nextPlayers);
+    if (previewPlayer) setAllLinkedPlayers(nextPlayers);
+  }, [players, previewPlayer]);
 
   useEffect(() => {
+    if (previewPlayer) return;
     loadAllLinkedPlayers();
-  }, [session?.user?.id, squadConfig.key, players?.length]);
+  }, [session?.user?.id, squadConfig.key, players?.length, previewPlayer]);
 
   useEffect(() => {
     if (!allLinkedPlayers.length && !localPlayers.length) return;
@@ -107,7 +112,7 @@ export default function ParentHome({
 
   useEffect(() => {
     async function loadAvailablePlayers() {
-      if (localPlayers.length || !squadConfig?.key) return;
+      if (previewPlayer || localPlayers.length || !squadConfig?.key) return;
 
       setLoadingAvailable(true);
 
@@ -128,7 +133,7 @@ export default function ParentHome({
     }
 
     loadAvailablePlayers();
-  }, [supabase, squadConfig?.key, localPlayers.length]);
+  }, [supabase, squadConfig?.key, localPlayers.length, previewPlayer]);
 
   useEffect(() => {
     if (!selectedPlayer?.id) return;
@@ -185,6 +190,11 @@ export default function ParentHome({
   }, [supabase, selectedPlayer?.id, squadConfig.key]);
 
   async function loadAllLinkedPlayers() {
+    if (previewPlayer) {
+      setAllLinkedPlayers([previewPlayer]);
+      return;
+    }
+
     if (!session?.user?.id) {
       setAllLinkedPlayers(players || []);
       return;
@@ -277,15 +287,16 @@ export default function ParentHome({
   }
 
   async function loadSquadRank(player) {
-    if (!player?.id || !player?.squad_key) {
+    if (!player?.id || !player?.squad_key || player?.is_test_player) {
       setSquadRank(null);
       return;
     }
 
     const { data: squadPlayers, error: playerError } = await supabase
       .from("players")
-      .select("id,name,squad_key")
-      .eq("squad_key", player.squad_key);
+      .select("id,name,squad_key,is_test_player")
+      .eq("squad_key", player.squad_key)
+      .eq("is_test_player", false);
 
     if (playerError) {
       console.error(playerError);
@@ -1156,7 +1167,7 @@ export default function ParentHome({
         activeWeek={challengeWeek}
         currentWeek={currentWeek}
         lockFutureWeeks={false}
-        onChangeWeek={setChallengeWeek}
+        onChangeWeek={week => setChallengeWeek(Math.min(8, Math.max(1, Number(week || 1))))}
         savedRuns={savedRuns}
         completions={completions}
         xpTotal={xpTotal}

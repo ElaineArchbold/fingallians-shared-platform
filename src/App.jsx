@@ -43,10 +43,13 @@ function NavIcon({ name }) {
     );
   }
 
-if (name === "skills") {
+ if (name === "skills") {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M7 3a2 2 0 0 0-2 2v16l7-4 7 4V5a2 2 0 0 0-2-2H7Z" />
+      <path
+        fill="currentColor"
+        d="M6 3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v19l-6-4-6 4V3z"
+      />
     </svg>
   );
 }
@@ -110,6 +113,9 @@ function getChildLinkParams() {
 
 function AppContent() {
   const { childToken, squadFromUrl } = getChildLinkParams();
+  const params = new URLSearchParams(window.location.search);
+  const previewPlayerId = params.get("previewPlayer") || "";
+  const parentPreviewRequested = params.get("previewMode") === "parent";
   const childMode = Boolean(childToken);
   const { squadKey, squadConfig, setSquadKey } = useSquadSelection();
 
@@ -136,6 +142,8 @@ function AppContent() {
 
   const [parentView, setParentView] = useState("challenge");
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
+  const [previewPlayer, setPreviewPlayer] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const adminKeys = adminSquadKeysForRoles(roles);
   const isSuperAdmin = isSuperAdminForSquad(roles, squadConfig);
@@ -158,6 +166,43 @@ function AppContent() {
     effectiveIsSuperAdmin ||
     isTestSquadAdmin ||
     singleSquadAdminKeys.includes(squadKey);
+
+  const parentPreviewMode = Boolean(
+    parentPreviewRequested &&
+    previewPlayerId &&
+    effectiveIsSuperAdmin
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreviewPlayer() {
+      if (!parentPreviewMode) {
+        setPreviewPlayer(null);
+        return;
+      }
+
+      setPreviewLoading(true);
+      const { data, error } = await supabase
+        .from("players")
+        .select("id,name,squad,squad_key,child_access_token,is_test_player")
+        .eq("id", previewPlayerId)
+        .eq("is_test_player", true)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error) console.error("Could not load test-player preview", error);
+      setPreviewPlayer(data || null);
+      setSelectedPlayerId(data?.id || "");
+      if (data?.squad_key && data.squad_key !== squadKey) {
+        setSquadKey(data.squad_key);
+      }
+      setPreviewLoading(false);
+    }
+
+    loadPreviewPlayer();
+    return () => { cancelled = true; };
+  }, [parentPreviewMode, previewPlayerId]);
 
   async function signOut() {
     const ok = window.confirm("Are you sure you want to sign out?");
@@ -186,13 +231,24 @@ function AppContent() {
   const waitingForTerms = Boolean(session && rolesLoaded && !isAdmin && !termsLoaded);
   const waitingForPlayers = Boolean(session && rolesLoaded && !isAdmin && !playersLoaded);
 
-  if (waitingForAuth || waitingForRoles || waitingForTerms || waitingForPlayers) {
+  if (waitingForAuth || waitingForRoles || waitingForTerms || waitingForPlayers || previewLoading) {
     return <div className="app-shell"><div className="card">Loading…</div></div>;
   }
 
   return (
     <>
-      <div className={isAdmin ? "app-shell admin-app-shell" : "app-shell"}>
+      <div className={isAdmin && !parentPreviewMode ? "app-shell admin-app-shell" : "app-shell"}>
+        {parentPreviewMode ? (
+          <div className="test-preview-banner">
+            <div>
+              <strong>🧪 Parent Preview</strong>
+              <span>{previewPlayer?.name || "Test player"}</span>
+            </div>
+            <button type="button" onClick={() => { window.location.href = window.location.pathname; }}>
+              Exit Preview
+            </button>
+          </div>
+        ) : null}
         {session && !isAdmin ? (
           <div className="topbar">
             <div className="topbar-brand">
@@ -206,7 +262,26 @@ function AppContent() {
           <TermsAndConditions supabase={supabase} session={session} squadConfig={squadConfig} onAccepted={() => window.location.reload()} />
         ) : null}
 
-        {!session ? (
+        {parentPreviewMode && previewPlayer ? (
+          <ParentHome
+            supabase={supabase}
+            session={session}
+            squadConfig={squadConfig}
+            squadKey={squadKey}
+            onChangeSquad={next => {
+              setSquadKey(next);
+              localStorage.setItem("lastSquadKey", next);
+            }}
+            players={[previewPlayer]}
+            selectedPlayerId={previewPlayer.id}
+            onSelectPlayer={setSelectedPlayerId}
+            parentView={parentView}
+            onChangeParentView={setParentView}
+            onSignOut={() => {}}
+            termsAcceptedAt={termsAcceptedAt}
+            previewPlayer={previewPlayer}
+          />
+        ) : !session ? (
           <AuthPanel
             supabase={supabase}
             squadConfig={squadConfig}
@@ -241,7 +316,7 @@ function AppContent() {
         )}
       </div>
 
-      {!isAdmin && session && termsAccepted ? (
+      {session && (parentPreviewMode || (!isAdmin && termsAccepted)) ? (
         <nav className="bottom-nav">
           <button className={parentView === "challenge" ? "active" : ""} onClick={() => setParentView("challenge")}>
             <NavIcon name="home" /><small>Home</small>
