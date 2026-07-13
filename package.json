@@ -14,6 +14,7 @@
     "@vitejs/plugin-react": "latest",
     "canvas-confetti": "latest",
     "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
     "leaflet": "^1.9.4",
     "lucide-react": "latest",
     "react": "latest",

@@ -128,53 +128,120 @@ function dateTime(value) {
 }
 
 function canShareFiles() {
-  return Boolean(navigator.share);
+  return Boolean(
+    navigator.share &&
+    typeof File !== "undefined"
+  );
 }
 
-async function dataUrlToBlob(dataUrl) {
-  const response = await fetch(dataUrl);
-  return response.blob();
+async function waitForImages(node) {
+  const images = Array.from(node?.querySelectorAll("img") || []);
+
+  await Promise.all(
+    images.map(image => {
+      if (image.complete && image.naturalWidth > 0) {
+        return Promise.resolve();
+      }
+
+      return new Promise(resolve => {
+        const finish = () => resolve();
+
+        image.addEventListener("load", finish, { once: true });
+        image.addEventListener("error", finish, { once: true });
+
+        setTimeout(finish, 3000);
+      });
+    })
+  );
 }
 
 async function downloadNodeAsImage(node, filename) {
-  if (!node) return;
-
-  const htmlToImage = await import("html-to-image").catch(() => null);
-
-  if (htmlToImage?.toPng) {
-    const dataUrl = await htmlToImage.toPng(node, {
-      pixelRatio: 2,
-      backgroundColor: "#fffaf4",
-      cacheBust: true,
-    });
-
-    if (canShareFiles()) {
-      try {
-        const blob = await dataUrlToBlob(dataUrl);
-        const file = new File([blob], filename, { type: "image/png" });
-
-        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: "Fingallians Leaderboard",
-            files: [file],
-          });
-          return;
-        }
-      } catch {
-        // Fall through to download/print.
-      }
-    }
-
-    const link = document.createElement("a");
-    link.href = dataUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  if (!node) {
+    alert("The leaderboard could not be found.");
     return;
   }
 
-  window.print();
+  try {
+    await waitForImages(node);
+
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    const html2canvasModule = await import("html2canvas");
+    const html2canvas = html2canvasModule.default;
+
+    const canvas = await html2canvas(node, {
+      scale: 2,
+      backgroundColor: "#fffaf4",
+      useCORS: true,
+      allowTaint: false,
+      logging: true,
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      windowWidth: document.documentElement.scrollWidth,
+    });
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(result => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(new Error("Canvas could not create a PNG image."));
+        }
+      }, "image/png");
+    });
+
+    const file = new File([blob], filename, {
+      type: "image/png",
+    });
+
+    if (
+      navigator.share &&
+      (!navigator.canShare ||
+        navigator.canShare({ files: [file] }))
+    ) {
+      try {
+        await navigator.share({
+          title: "Fingallians Leaderboard",
+          text: "Fingallians Fitness Challenge leaderboard",
+          files: [file],
+        });
+
+        return;
+      } catch (shareError) {
+        if (shareError?.name === "AbortError") {
+          return;
+        }
+
+        console.warn(
+          "Sharing failed, downloading instead.",
+          shareError
+        );
+      }
+    }
+
+    const imageUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = imageUrl;
+    link.download = filename;
+    link.style.display = "none";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => {
+      URL.revokeObjectURL(imageUrl);
+    }, 2000);
+  } catch (error) {
+    console.error("Leaderboard image export failed:", error);
+
+    alert(
+      `The leaderboard image could not be saved.\n\n${error?.message || "Unknown error"}`
+    );
+  }
 }
 
 export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = [], onSignOut }) {
@@ -209,6 +276,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
   const [runActivity, setRunActivity] = useState(null);
   const [toast, setToast] = useState("");
   const [coachRefreshKey, setCoachRefreshKey] = useState(0);
+  const [leaderboardExportLimit, setLeaderboardExportLimit] = useState(20);
 
   const leaderboardRef = useRef(null);
   const migrationListRef = useRef(null);
@@ -320,10 +388,10 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
 
   const filteredMigrationRows = isSuperAdmin
     ? migrationRows.filter(row => {
-        const detailsSquad = row?.details?.squad_key || row?.details?.selected_squad || row?.details?.squadKey;
-        const squadMatches = adminSquad === "all" || !detailsSquad || detailsSquad === adminSquad;
-        return squadMatches && isAuditRowInDateRange(row);
-      })
+      const detailsSquad = row?.details?.squad_key || row?.details?.selected_squad || row?.details?.squadKey;
+      const squadMatches = adminSquad === "all" || !detailsSquad || detailsSquad === adminSquad;
+      return squadMatches && isAuditRowInDateRange(row);
+    })
     : [];
 
   const redirectSourceStats = Object.entries(
@@ -1356,7 +1424,7 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
     );
   }
 
-function renderPlayerDrawer(player) {
+  function renderPlayerDrawer(player) {
     const playerRuns = playerRunsFor(player);
     const playerCompletions = playerCompletionsFor(player);
     const playerXp = playerXpFor(player);
@@ -1588,15 +1656,39 @@ function renderPlayerDrawer(player) {
   }
 
   function renderLeaderboard() {
+    const exportRows = leaderboard.slice(0, leaderboardExportLimit);
+
     return (
       <div className="admin-panel">
         <div className="admin-leaderboard-actions">
-          <button className="button primary" onClick={() => downloadNodeAsImage(leaderboardRef.current, "fingallians-leaderboard.png")}>
-            Save Leaderboard Image
+          <select
+            className="select"
+            value={leaderboardExportLimit}
+            onChange={event =>
+              setLeaderboardExportLimit(Number(event.target.value))
+            }
+            aria-label="Leaderboard image size"
+          >
+            <option value={10}>Top 10</option>
+            <option value={20}>Top 20</option>
+            <option value={30}>Top 30</option>
+          </select>
+
+          <button
+            className="button primary"
+            type="button"
+            onClick={async () => {
+              await downloadNodeAsImage(
+                leaderboardRef.current,
+                `fingallians-top-${leaderboardExportLimit}-leaderboard.png`
+              );
+            }}
+          >
+            Save Top {leaderboardExportLimit}
           </button>
         </div>
 
-        <section className="admin-leaderboard-card" ref={leaderboardRef}>
+        <section className="admin-leaderboard-card">
           <div className="admin-leaderboard-header">
             <img src="/fingallians-crest.png" alt="" />
             <div>
@@ -1611,14 +1703,24 @@ function renderPlayerDrawer(player) {
                 type="button"
                 className={`admin-leaderboard-row rank-${index + 1}`}
                 key={row.player.id}
-                onClick={() => setDetailModal({ type: "playerActivity", player: row.player })}
+                onClick={() =>
+                  setDetailModal({
+                    type: "playerActivity",
+                    player: row.player,
+                  })
+                }
               >
                 <span className="rank-number">{index + 1}</span>
-                <span className="rank-avatar">{initials(row.player.name)}</span>
+                <span className="rank-avatar">
+                  {initials(row.player.name)}
+                </span>
 
                 <div>
                   <strong>{row.player.name}</strong>
-                  <small>{displaySquad(row.player.squad_key)} · {row.completed} missions · {row.distance.toFixed(1)} km</small>
+                  <small>
+                    {displaySquad(row.player.squad_key)} · {row.completed} missions ·{" "}
+                    {row.distance.toFixed(1)} km
+                  </small>
                 </div>
 
                 <em>{row.xp} XP</em>
@@ -1626,6 +1728,62 @@ function renderPlayerDrawer(player) {
             ))}
           </div>
         </section>
+
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: "-10000px",
+            top: 0,
+            width: "900px",
+            pointerEvents: "none",
+          }}
+        >
+          <section
+            className="admin-leaderboard-card"
+            ref={leaderboardRef}
+            style={{
+              width: "900px",
+              maxWidth: "none",
+              margin: 0,
+              overflow: "visible",
+            }}
+          >
+            <div className="admin-leaderboard-header">
+              <img src="/fingallians-crest.png" alt="" />
+              <div>
+                <h2>Fingallians Fitness Challenge</h2>
+                <p>
+                  {displaySquad(adminSquad)} · Top {leaderboardExportLimit}
+                </p>
+              </div>
+            </div>
+
+            <div className="admin-leaderboard-list">
+              {exportRows.map((row, index) => (
+                <div
+                  className={`admin-leaderboard-row rank-${index + 1}`}
+                  key={`export-${row.player.id}`}
+                >
+                  <span className="rank-number">{index + 1}</span>
+                  <span className="rank-avatar">
+                    {initials(row.player.name)}
+                  </span>
+
+                  <div>
+                    <strong>{row.player.name}</strong>
+                    <small>
+                      {displaySquad(row.player.squad_key)} · {row.completed} missions ·{" "}
+                      {row.distance.toFixed(1)} km
+                    </small>
+                  </div>
+
+                  <em>{row.xp} XP</em>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
     );
   }
@@ -2810,12 +2968,12 @@ function renderPlayerDrawer(player) {
           )}
 
           <button className="admin-bell-button admin-icon-button" onClick={() => setActiveTab("approvals")} aria-label="Approvals">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.7 2.7 0 0 0 2.6-2h-5.2A2.7 2.7 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.7 2.7 0 0 0 2.6-2h-5.2A2.7 2.7 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5-6.7V3a2 2 0 0 0-4 0v1.3A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z" /></svg>
             {pendingApprovals.length ? <em>{pendingApprovals.length}</em> : null}
           </button>
 
           <button className="admin-signout-link admin-icon-button" onClick={onSignOut} aria-label="Sign out">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9a2 2 0 0 1 2 2v3h-2V5H7v14h7v-3h2v3a2 2 0 0 1-2 2H5V3Zm11.6 5.4L20.2 12l-3.6 3.6-1.4-1.4 1.2-1.2H10v-2h6.4l-1.2-1.2 1.4-1.4Z"/></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9a2 2 0 0 1 2 2v3h-2V5H7v14h7v-3h2v3a2 2 0 0 1-2 2H5V3Zm11.6 5.4L20.2 12l-3.6 3.6-1.4-1.4 1.2-1.2H10v-2h6.4l-1.2-1.2 1.4-1.4Z" /></svg>
           </button>
         </div>
       </section>
@@ -2825,19 +2983,19 @@ function renderPlayerDrawer(player) {
           .filter(tab => !tab.superAdminOnly || isSuperAdmin)
           .sort((a, b) => (a.key === "migration" ? 1 : 0) - (b.key === "migration" ? 1 : 0))
           .map(tab => (
-          <button
-            key={tab.key}
-            className={activeTab === tab.key ? "active" : ""}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            <span>{tab.icon}</span>
-            <small>{tab.label}</small>
+            <button
+              key={tab.key}
+              className={activeTab === tab.key ? "active" : ""}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              <span>{tab.icon}</span>
+              <small>{tab.label}</small>
 
-            {tab.key === "approvals" && pendingApprovals.length ? (
-              <em>{pendingApprovals.length}</em>
-            ) : null}
-          </button>
-        ))}
+              {tab.key === "approvals" && pendingApprovals.length ? (
+                <em>{pendingApprovals.length}</em>
+              ) : null}
+            </button>
+          ))}
       </nav>
 
       {renderCurrentTab()}
