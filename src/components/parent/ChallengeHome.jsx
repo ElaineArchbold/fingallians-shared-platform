@@ -27,6 +27,23 @@ function isBonusActivity(activity) {
   return activity.activity_key === "bonus";
 }
 
+function runOrder(activity) {
+  const explicitOrder = Number(
+    activity?.run_number ??
+    activity?.run_order ??
+    activity?.sort_order
+  );
+
+  if (Number.isFinite(explicitOrder) && explicitOrder > 0) {
+    return explicitOrder;
+  }
+
+  const title = String(activity?.title || "");
+  const match = title.match(/run\s*(\d+)/i);
+
+  return match ? Number(match[1]) : 999;
+}
+
 function displaySquadText(text, squadKey) {
   const skill = squadKey.includes("girls") ? "Camogie" : "Hurling";
 
@@ -350,14 +367,19 @@ export default function ChallengeHome({
   function runForActivity(activity) {
     if (!activity) return null;
 
+    const exactTaskMatch = savedRuns.find(
+      run => String(run.task_key || "") === String(activity.id || "")
+    );
+
+    if (exactTaskMatch) return exactTaskMatch;
+
     return savedRuns.find(run => {
-      const sameTask = String(run.task_key || "") === String(activity.id || "");
       const sameWeek = Number(run.week || safeWeek) === Number(safeWeek);
       const sameTitle =
         String(run.label || "").toLowerCase().trim() ===
         String(activity.title || "").toLowerCase().trim();
 
-      return sameTask || (sameWeek && sameTitle);
+      return sameWeek && sameTitle;
     });
   }
 
@@ -370,6 +392,26 @@ export default function ChallengeHome({
 
   const fitnessItems = activities
     .filter(a => a.activity_key === "fitness")
+    .sort((a, b) => {
+      const aIsRun = isRunActivity(a);
+      const bIsRun = isRunActivity(b);
+
+      if (aIsRun && bIsRun) {
+        return (
+          runOrder(a) - runOrder(b) ||
+          Number(a.sort_order || 0) - Number(b.sort_order || 0) ||
+          String(a.title || "").localeCompare(String(b.title || ""))
+        );
+      }
+
+      if (aIsRun) return -1;
+      if (bIsRun) return 1;
+
+      return (
+        Number(a.sort_order || 0) - Number(b.sort_order || 0) ||
+        String(a.title || "").localeCompare(String(b.title || ""))
+      );
+    })
     .slice(0, 3);
 
   const speed = activities.find(a => a.activity_key === "running-technique");
@@ -438,7 +480,28 @@ export default function ChallengeHome({
 
   const progressPercent = approvedPercent;
 
-  const currentWeekRuns = savedRuns.filter(run => Number(run.week || 1) === safeWeek);
+  const currentWeekRuns = savedRuns
+    .filter(run => Number(run.week || 1) === safeWeek)
+    .sort((a, b) => {
+      const aOrder = runOrder({
+        title: a.label,
+        run_number: a.run_number,
+        run_order: a.run_order,
+        sort_order: a.sort_order,
+      });
+      const bOrder = runOrder({
+        title: b.label,
+        run_number: b.run_number,
+        run_order: b.run_order,
+        sort_order: b.sort_order,
+      });
+
+      return (
+        aOrder - bOrder ||
+        new Date(a.saved_at || a.created_at || 0) -
+          new Date(b.saved_at || b.created_at || 0)
+      );
+    });
   const totalDistanceKm = savedRuns.reduce(
     (total, run) => total + Number(run.distance_km || 0),
     0

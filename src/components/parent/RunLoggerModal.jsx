@@ -216,10 +216,18 @@ export default function RunLoggerModal({
   const successConfettiTimeoutRef = useRef(null);
   const savingRef = useRef(false);
   const audioContextRef = useRef(null);
+  const trackingRef = useRef(false);
+  const reconnectTimeoutRef = useRef(null);
+  const staleGpsIntervalRef = useRef(null);
+  const lastGpsUpdateRef = useRef(0);
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
     activity?.target_unit === "km" ? Number(activity.target_value || 0) : 0;
+  const activityWeek = Math.min(
+    8,
+    Math.max(1, Number(activity?.week_number ?? activity?.week ?? 1))
+  );
   const latestPoint = points[points.length - 1] || null;
   const route = useMemo(() => points.map(point => [point.lat, point.lng]), [points]);
   const pace = paceFromSeconds(elapsed, distanceKm);
@@ -271,16 +279,45 @@ export default function RunLoggerModal({
   }, [tracking]);
 
   useEffect(() => {
+    function handleVisibilityChange() {
+      if (
+        document.visibilityState === "visible" &&
+        trackingRef.current &&
+        !pausedRef.current
+      ) {
+        const staleForMs = Date.now() - lastGpsUpdateRef.current;
+
+        if (!lastGpsUpdateRef.current || staleForMs > 10000) {
+          restartGpsWatch("GPS reconnecting after the app resumed…");
+        }
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       stopTracking();
       cancelHoldFinish();
     };
   }, []);
 
   function stopTracking() {
-    if (watchRef.current) {
+    trackingRef.current = false;
+
+    if (watchRef.current !== null) {
       navigator.geolocation.clearWatch(watchRef.current);
       watchRef.current = null;
+    }
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (staleGpsIntervalRef.current) {
+      clearInterval(staleGpsIntervalRef.current);
+      staleGpsIntervalRef.current = null;
     }
 
     if (timerRef.current) {
@@ -431,6 +468,111 @@ export default function RunLoggerModal({
     startTrafficLightCountdown();
   }
 
+  function acceptGpsPosition(position) {
+    if (!trackingRef.current || pausedRef.current) return;
+
+    const accuracy = Number(position.coords.accuracy || 999);
+    const nextPoint = {
+      lat: Number(position.coords.latitude),
+      lng: Number(position.coords.longitude),
+      acc: accuracy,
+      ts: Date.now(),
+    };
+
+    if (!Number.isFinite(nextPoint.lat) || !Number.isFinite(nextPoint.lng)) return;
+
+    lastGpsUpdateRef.current = Date.now();
+
+    if (accuracy > 120) {
+      setGpsStatus(`Weak GPS signal (${Math.round(accuracy)}m). Searching for a better fix…`);
+      return;
+    }
+
+    setPoints(previous => {
+      const last = previous[previous.length - 1];
+
+      if (last) {
+        const segmentKm = distanceBetween(last, nextPoint);
+        const seconds = Math.max(1, (nextPoint.ts - last.ts) / 1000);
+        const speedKmh = segmentKm / (seconds / 3600);
+
+        if (segmentKm < 0.003) {
+          setGpsStatus(`GPS active · accuracy ${Math.round(accuracy)}m`);
+          return previous;
+        }
+
+        if (segmentKm > 0.35 && speedKmh > 28) {
+          setGpsStatus("Ignored one jumpy GPS point. Still tracking.");
+          return previous;
+        }
+      }
+
+      const updated = [...previous, nextPoint];
+      pointsRef.current = updated;
+      setGpsStatus(`GPS active · accuracy ${Math.round(accuracy)}m`);
+      return updated;
+    });
+  }
+
+  function scheduleGpsReconnect(message = "GPS signal dropped. Reconnecting…") {
+    if (!trackingRef.current) return;
+
+    setGpsStatus(message);
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+
+      if (trackingRef.current && !pausedRef.current) {
+        startGpsWatch();
+      }
+    }, 2000);
+  }
+
+  function startGpsWatch() {
+    if (!navigator.geolocation || !trackingRef.current) return;
+
+    if (watchRef.current !== null) {
+      navigator.geolocation.clearWatch(watchRef.current);
+      watchRef.current = null;
+    }
+
+    watchRef.current = navigator.geolocation.watchPosition(
+      acceptGpsPosition,
+      error => {
+        console.error("GPS watch error", error);
+
+        if (!trackingRef.current) return;
+
+        if (error?.code === 1) {
+          setGpsStatus("Location permission was denied. Enable location access or use manual entry.");
+          return;
+        }
+
+        scheduleGpsReconnect(
+          error?.code === 3
+            ? "GPS timed out. Reconnecting…"
+            : "GPS signal dropped. Reconnecting…"
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 60000,
+      }
+    );
+  }
+
+  function restartGpsWatch(message = "GPS reconnecting…") {
+    if (!trackingRef.current || pausedRef.current) return;
+
+    setGpsStatus(message);
+    startGpsWatch();
+  }
+
   function startGps() {
     setCountdownStep("");
     setShowStartCoachNote(false);
@@ -441,93 +583,80 @@ export default function RunLoggerModal({
       return;
     }
 
+    setElapsed(0);
+    setPoints([]);
+    pointsRef.current = [];
+    lastGpsUpdateRef.current = Date.now();
+
+    trackingRef.current = true;
     setTracking(true);
     setPaused(false);
     pausedRef.current = false;
     setGpsStatus("Finding GPS signal…");
 
+    if (timerRef.current) clearInterval(timerRef.current);
+
     timerRef.current = setInterval(() => {
-      if (!pausedRef.current) {
-        setElapsed(value => value + 1);
-      }
+      if (!pausedRef.current) setElapsed(value => value + 1);
     }, 1000);
 
     navigator.geolocation.getCurrentPosition(
       position => {
+        if (!trackingRef.current) return;
+
         const firstPoint = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
+          lat: Number(position.coords.latitude),
+          lng: Number(position.coords.longitude),
           acc: Number(position.coords.accuracy || 999),
           ts: Date.now(),
         };
 
+        if (!Number.isFinite(firstPoint.lat) || !Number.isFinite(firstPoint.lng)) return;
+
+        lastGpsUpdateRef.current = Date.now();
         setPoints([firstPoint]);
         pointsRef.current = [firstPoint];
         setGpsStatus(`GPS active · accuracy ${Math.round(firstPoint.acc)}m`);
       },
-      () => {
-        setGpsStatus("Waiting for GPS fix…");
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 1000 }
-    );
+      error => {
+        console.error("Initial GPS fix failed", error);
 
-    watchRef.current = navigator.geolocation.watchPosition(
-      position => {
-        if (pausedRef.current) return;
-
-        const accuracy = Number(position.coords.accuracy || 999);
-
-        const nextPoint = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          acc: accuracy,
-          ts: Date.now(),
-        };
-
-        if (!Number.isFinite(nextPoint.lat) || !Number.isFinite(nextPoint.lng)) return;
-
-        if (accuracy > 80) {
-          setGpsStatus(`Weak GPS signal (${Math.round(accuracy)}m). Keep moving in open sky.`);
+        if (error?.code === 1) {
+          setGpsStatus("Location permission was denied. Enable location access or use manual entry.");
           return;
         }
 
-        setPoints(previous => {
-          const last = previous[previous.length - 1];
-
-          if (last) {
-            const segmentKm = distanceBetween(last, nextPoint);
-            const seconds = Math.max(1, (nextPoint.ts - last.ts) / 1000);
-            const speedKmh = segmentKm / (seconds / 3600);
-
-            if (segmentKm < 0.003) return previous;
-
-            if (segmentKm > 0.35 && speedKmh > 28) {
-              setGpsStatus("Ignored one jumpy GPS point. Still tracking.");
-              return previous;
-            }
-          }
-
-          const updated = [...previous, nextPoint];
-          pointsRef.current = updated;
-          setGpsStatus(`GPS active · accuracy ${Math.round(accuracy)}m`);
-          return updated;
-        });
+        setGpsStatus("Waiting for GPS fix…");
       },
-      error => {
-        console.error(error);
-        setGpsStatus("GPS signal dropped. Keep moving — it should reconnect.");
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 30000,
-      }
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 2000 }
     );
+
+    startGpsWatch();
+
+    if (staleGpsIntervalRef.current) clearInterval(staleGpsIntervalRef.current);
+
+    staleGpsIntervalRef.current = setInterval(() => {
+      if (!trackingRef.current || pausedRef.current) return;
+
+      const staleForMs = Date.now() - lastGpsUpdateRef.current;
+
+      if (staleForMs > 20000) {
+        restartGpsWatch("No GPS update for 20 seconds. Reconnecting…");
+      }
+    }, 5000);
   }
 
   function togglePause() {
     pausedRef.current = !pausedRef.current;
     setPaused(pausedRef.current);
+
+    if (pausedRef.current) {
+      setGpsStatus("Run paused.");
+      return;
+    }
+
+    lastGpsUpdateRef.current = Date.now();
+    restartGpsWatch("Run resumed. Reconnecting GPS…");
   }
 
   function startHoldFinish(event) {
@@ -603,6 +732,7 @@ export default function RunLoggerModal({
       activityId: activity.id,
       playerId: selectedPlayer.id,
       title: activity.title,
+      week: activityWeek,
       targetKm,
       distanceKm,
       durationMin: gpsDurationMin,
@@ -666,6 +796,7 @@ export default function RunLoggerModal({
       activityId: activity.id,
       playerId: selectedPlayer.id,
       title: activity.title,
+      week: activityWeek,
       targetKm,
       distanceKm: distance,
       durationMin: minutes || null,
@@ -825,7 +956,7 @@ export default function RunLoggerModal({
               <div className="challenge-run-card-body">
                 <h3>{selectedPlayer.name}</h3>
                 <p className="challenge-run-card-subtitle">
-                  Week 1 · {activity.title} · Target {targetKm || activity.target_value}
+                  Week {activityWeek} · {activity.title} · Target {targetKm || activity.target_value}
                   {activity.target_unit}
                 </p>
                 <p className="challenge-run-card-date">{formatDateTime(finishedRun.savedAt)}</p>
@@ -927,7 +1058,7 @@ export default function RunLoggerModal({
         <div className="run-logger-header">
           <h2>RUN LOGGER</h2>
           <p>
-            Week 1 · {activity.title} · Target {targetKm || activity.target_value}
+            Week {activityWeek} · {activity.title} · Target {targetKm || activity.target_value}
             {activity.target_unit}
           </p>
         </div>

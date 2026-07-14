@@ -2661,8 +2661,12 @@ export default function AdminHome({ squadConfig, isSuperAdmin, adminSquadKeys = 
       player_id: player.id,
       player_name: player.name,
       task_key: result.activityId,
-      week: 1,
-      label: result.title,
+      week: Number(
+        activity?.week_number ??
+        result?.week ??
+        currentChallengeWeek ??
+        1
+      ), label: result.title,
       target: result.targetKm ? `${result.targetKm} km` : null,
       run_type: result.type,
       distance_km: result.distanceKm,
