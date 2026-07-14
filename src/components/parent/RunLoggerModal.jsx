@@ -220,6 +220,7 @@ export default function RunLoggerModal({
   const reconnectTimeoutRef = useRef(null);
   const staleGpsIntervalRef = useRef(null);
   const lastGpsUpdateRef = useRef(0);
+  const wakeLockRef = useRef(null);
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
@@ -285,6 +286,8 @@ export default function RunLoggerModal({
         trackingRef.current &&
         !pausedRef.current
       ) {
+        requestScreenWakeLock();
+
         const staleForMs = Date.now() - lastGpsUpdateRef.current;
 
         if (!lastGpsUpdateRef.current || staleForMs > 10000) {
@@ -302,8 +305,43 @@ export default function RunLoggerModal({
     };
   }, []);
 
+  async function requestScreenWakeLock() {
+    if (!("wakeLock" in navigator)) return;
+
+    if (wakeLockRef.current && !wakeLockRef.current.released) {
+      return;
+    }
+
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      wakeLockRef.current = lock;
+
+      lock.addEventListener("release", () => {
+        if (wakeLockRef.current === lock) {
+          wakeLockRef.current = null;
+        }
+      });
+    } catch (error) {
+      console.warn("Screen wake lock unavailable:", error);
+    }
+  }
+
+  async function releaseScreenWakeLock() {
+    const lock = wakeLockRef.current;
+    wakeLockRef.current = null;
+
+    if (!lock || lock.released) return;
+
+    try {
+      await lock.release();
+    } catch (error) {
+      console.warn("Could not release screen wake lock:", error);
+    }
+  }
+
   function stopTracking() {
     trackingRef.current = false;
+    releaseScreenWakeLock();
 
     if (watchRef.current !== null) {
       navigator.geolocation.clearWatch(watchRef.current);
@@ -590,6 +628,7 @@ export default function RunLoggerModal({
 
     trackingRef.current = true;
     setTracking(true);
+    requestScreenWakeLock();
     setPaused(false);
     pausedRef.current = false;
     setGpsStatus("Finding GPS signal…");
@@ -1111,6 +1150,12 @@ export default function RunLoggerModal({
             </div>
 
             <p className="run-status">{gpsStatus}</p>
+
+            {tracking ? (
+              <p className="run-status">
+                🔋 Keep this screen open. Your phone will stay awake while GPS tracking is active.
+              </p>
+            ) : null}
 
             {!tracking ? (
               <button
