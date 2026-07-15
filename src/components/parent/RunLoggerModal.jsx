@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import * as htmlToImage from "html-to-image";
+import { supabase } from "../../lib/supabaseClient";
 import {
   playCountdownGo,
   playCountdownReady,
@@ -221,6 +222,11 @@ export default function RunLoggerModal({
   const staleGpsIntervalRef = useRef(null);
   const lastGpsUpdateRef = useRef(0);
   const wakeLockRef = useRef(null);
+  const runSessionIdRef = useRef(null);
+  const firstFixLoggedRef = useRef(false);
+  const reconnectCountRef = useRef(0);
+  const staleRecoveryLevelRef = useRef(0);
+  const lastTelemetryHeartbeatRef = useRef(0);
 
   const distanceKm = Number(totalDistanceKm(points).toFixed(2));
   const targetKm =
@@ -279,19 +285,73 @@ export default function RunLoggerModal({
     };
   }, [tracking]);
 
+  async function logGpsEvent(eventType, extra = {}) {
+    const runSessionId = runSessionIdRef.current;
+
+    if (!runSessionId || !selectedPlayer?.id || !activity?.id) return;
+
+    const currentPoints = pointsRef.current || [];
+
+    try {
+      const { error } = await supabase.from("gps_run_events").insert({
+        run_session_id: runSessionId,
+        player_id: selectedPlayer.id,
+        activity_id: activity.id,
+        event_type: eventType,
+        accuracy_m: extra.accuracy_m ?? null,
+        point_count: currentPoints.length,
+        distance_km: Number(totalDistanceKm(currentPoints).toFixed(3)),
+        error_code: extra.error_code ?? null,
+        details: {
+          week: activityWeek,
+          activity_title: activity.title,
+          player_name: selectedPlayer.name,
+          visibility_state: document.visibilityState,
+          reconnect_count: reconnectCountRef.current,
+          ...extra.details,
+        },
+        occurred_at: new Date().toISOString(),
+      });
+
+      if (error) console.warn("GPS telemetry insert failed:", eventType, error);
+    } catch (error) {
+      console.warn("GPS telemetry unavailable:", eventType, error);
+    }
+  }
+
   useEffect(() => {
     function handleVisibilityChange() {
-      if (
-        document.visibilityState === "visible" &&
-        trackingRef.current &&
-        !pausedRef.current
-      ) {
+      if (!trackingRef.current) return;
+
+      if (document.visibilityState === "hidden") {
+        logGpsEvent("app_hidden", {
+          details: {
+            last_gps_at: lastGpsUpdateRef.current
+              ? new Date(lastGpsUpdateRef.current).toISOString()
+              : null,
+          },
+        });
+        return;
+      }
+
+      if (document.visibilityState === "visible" && !pausedRef.current) {
+        logGpsEvent("app_visible", {
+          details: {
+            last_gps_at: lastGpsUpdateRef.current
+              ? new Date(lastGpsUpdateRef.current).toISOString()
+              : null,
+          },
+        });
+
         requestScreenWakeLock();
 
         const staleForMs = Date.now() - lastGpsUpdateRef.current;
 
         if (!lastGpsUpdateRef.current || staleForMs > 10000) {
-          restartGpsWatch("GPS reconnecting after the app resumed…");
+          restartGpsWatch("GPS reconnecting after the app resumed…", {
+            reason: "app_visible_stale",
+            stale_for_ms: staleForMs,
+          });
         }
       }
     }
@@ -315,14 +375,24 @@ export default function RunLoggerModal({
     try {
       const lock = await navigator.wakeLock.request("screen");
       wakeLockRef.current = lock;
+      logGpsEvent("wake_lock_acquired");
 
       lock.addEventListener("release", () => {
         if (wakeLockRef.current === lock) {
           wakeLockRef.current = null;
         }
+
+        if (trackingRef.current) {
+          logGpsEvent("wake_lock_released", {
+            details: { unexpected: true },
+          });
+        }
       });
     } catch (error) {
       console.warn("Screen wake lock unavailable:", error);
+      logGpsEvent("wake_lock_unavailable", {
+        details: { message: error?.message || String(error) },
+      });
     }
   }
 
@@ -334,6 +404,9 @@ export default function RunLoggerModal({
 
     try {
       await lock.release();
+      logGpsEvent("wake_lock_released", {
+        details: { unexpected: false },
+      });
     } catch (error) {
       console.warn("Could not release screen wake lock:", error);
     }
@@ -520,10 +593,22 @@ export default function RunLoggerModal({
     if (!Number.isFinite(nextPoint.lat) || !Number.isFinite(nextPoint.lng)) return;
 
     lastGpsUpdateRef.current = Date.now();
+    staleRecoveryLevelRef.current = 0;
+
+    if (!firstFixLoggedRef.current) {
+      firstFixLoggedRef.current = true;
+      logGpsEvent("first_fix", { accuracy_m: accuracy });
+    }
 
     if (accuracy > 120) {
       setGpsStatus(`Weak GPS signal (${Math.round(accuracy)}m). Searching for a better fix…`);
+      logGpsEvent("weak_signal", { accuracy_m: accuracy });
       return;
+    }
+
+    if (Date.now() - lastTelemetryHeartbeatRef.current > 60000) {
+      lastTelemetryHeartbeatRef.current = Date.now();
+      logGpsEvent("gps_heartbeat", { accuracy_m: accuracy });
     }
 
     setPoints(previous => {
@@ -552,7 +637,10 @@ export default function RunLoggerModal({
     });
   }
 
-  function scheduleGpsReconnect(message = "GPS signal dropped. Reconnecting…") {
+  function scheduleGpsReconnect(
+    message = "GPS signal dropped. Reconnecting…",
+    context = {}
+  ) {
     if (!trackingRef.current) return;
 
     setGpsStatus(message);
@@ -565,6 +653,13 @@ export default function RunLoggerModal({
       reconnectTimeoutRef.current = null;
 
       if (trackingRef.current && !pausedRef.current) {
+        reconnectCountRef.current += 1;
+        logGpsEvent("watch_restarted", {
+          details: {
+            reason: context.reason || "scheduled_reconnect",
+            ...context,
+          },
+        });
         startGpsWatch();
       }
     }, 2000);
@@ -587,13 +682,34 @@ export default function RunLoggerModal({
 
         if (error?.code === 1) {
           setGpsStatus("Location permission was denied. Enable location access or use manual entry.");
+          logGpsEvent("permission_denied", {
+            error_code: error.code,
+            details: {
+              message: error.message || null,
+              source: "watch_position",
+            },
+          });
           return;
         }
+
+        const eventType = error?.code === 3 ? "gps_timeout" : "gps_unavailable";
+
+        logGpsEvent(eventType, {
+          error_code: error?.code,
+          details: {
+            message: error?.message || null,
+            source: "watch_position",
+          },
+        });
 
         scheduleGpsReconnect(
           error?.code === 3
             ? "GPS timed out. Reconnecting…"
-            : "GPS signal dropped. Reconnecting…"
+            : "GPS signal dropped. Reconnecting…",
+          {
+            reason: eventType,
+            error_code: error?.code || null,
+          }
         );
       },
       {
@@ -604,10 +720,17 @@ export default function RunLoggerModal({
     );
   }
 
-  function restartGpsWatch(message = "GPS reconnecting…") {
+  function restartGpsWatch(message = "GPS reconnecting…", context = {}) {
     if (!trackingRef.current || pausedRef.current) return;
 
     setGpsStatus(message);
+    reconnectCountRef.current += 1;
+    logGpsEvent("watch_restarted", {
+      details: {
+        reason: context.reason || "direct_restart",
+        ...context,
+      },
+    });
     startGpsWatch();
   }
 
@@ -625,6 +748,11 @@ export default function RunLoggerModal({
     setPoints([]);
     pointsRef.current = [];
     lastGpsUpdateRef.current = Date.now();
+    runSessionIdRef.current = crypto.randomUUID();
+    firstFixLoggedRef.current = false;
+    reconnectCountRef.current = 0;
+    staleRecoveryLevelRef.current = 0;
+    lastTelemetryHeartbeatRef.current = 0;
 
     trackingRef.current = true;
     setTracking(true);
@@ -632,6 +760,12 @@ export default function RunLoggerModal({
     setPaused(false);
     pausedRef.current = false;
     setGpsStatus("Finding GPS signal…");
+    logGpsEvent("run_started", {
+      details: {
+        target_km: targetKm,
+        manual_only: manualOnly,
+      },
+    });
 
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -662,8 +796,26 @@ export default function RunLoggerModal({
 
         if (error?.code === 1) {
           setGpsStatus("Location permission was denied. Enable location access or use manual entry.");
+          logGpsEvent("permission_denied", {
+            error_code: error.code,
+            details: {
+              message: error.message || null,
+              source: "initial_fix",
+            },
+          });
           return;
         }
+
+        logGpsEvent(
+          error?.code === 3 ? "gps_timeout" : "gps_unavailable",
+          {
+            error_code: error?.code,
+            details: {
+              message: error?.message || null,
+              source: "initial_fix",
+            },
+          }
+        );
 
         setGpsStatus("Waiting for GPS fix…");
       },
@@ -679,8 +831,69 @@ export default function RunLoggerModal({
 
       const staleForMs = Date.now() - lastGpsUpdateRef.current;
 
-      if (staleForMs > 20000) {
-        restartGpsWatch("No GPS update for 20 seconds. Reconnecting…");
+      if (staleForMs > 90000 && staleRecoveryLevelRef.current < 4) {
+        staleRecoveryLevelRef.current = 4;
+        setGpsStatus("GPS signal has been unavailable for a while. Still trying to recover…");
+        logGpsEvent("gps_stale_90s", {
+          details: { stale_for_ms: staleForMs },
+        });
+        restartGpsWatch("GPS signal lost. Trying again…", {
+          reason: "stale_90s",
+          stale_for_ms: staleForMs,
+        });
+        return;
+      }
+
+      if (staleForMs > 60000 && staleRecoveryLevelRef.current < 3) {
+        staleRecoveryLevelRef.current = 3;
+        logGpsEvent("gps_stale_60s", {
+          details: { stale_for_ms: staleForMs },
+        });
+
+        navigator.geolocation.getCurrentPosition(
+          acceptGpsPosition,
+          error => {
+            logGpsEvent(
+              error?.code === 3 ? "gps_timeout" : "gps_unavailable",
+              {
+                error_code: error?.code,
+                details: {
+                  message: error?.message || null,
+                  source: "stale_recovery_get_current_position",
+                },
+              }
+            );
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 0,
+          }
+        );
+        return;
+      }
+
+      if (staleForMs > 40000 && staleRecoveryLevelRef.current < 2) {
+        staleRecoveryLevelRef.current = 2;
+        logGpsEvent("gps_stale_40s", {
+          details: { stale_for_ms: staleForMs },
+        });
+        restartGpsWatch("GPS still unavailable. Recreating tracker…", {
+          reason: "stale_40s",
+          stale_for_ms: staleForMs,
+        });
+        return;
+      }
+
+      if (staleForMs > 20000 && staleRecoveryLevelRef.current < 1) {
+        staleRecoveryLevelRef.current = 1;
+        logGpsEvent("gps_stale_20s", {
+          details: { stale_for_ms: staleForMs },
+        });
+        restartGpsWatch("No GPS update for 20 seconds. Reconnecting…", {
+          reason: "stale_20s",
+          stale_for_ms: staleForMs,
+        });
       }
     }, 5000);
   }
@@ -691,11 +904,15 @@ export default function RunLoggerModal({
 
     if (pausedRef.current) {
       setGpsStatus("Run paused.");
+      logGpsEvent("run_paused");
       return;
     }
 
+    logGpsEvent("run_resumed");
     lastGpsUpdateRef.current = Date.now();
-    restartGpsWatch("Run resumed. Reconnecting GPS…");
+    restartGpsWatch("Run resumed. Reconnecting GPS…", {
+      reason: "run_resumed",
+    });
   }
 
   function startHoldFinish(event) {
@@ -747,6 +964,14 @@ export default function RunLoggerModal({
       return;
     }
 
+    await logGpsEvent("run_finished", {
+      details: {
+        elapsed_seconds: elapsed,
+        final_distance_km: distanceKm,
+        reconnect_count: reconnectCountRef.current,
+      },
+    });
+
     stopTracking();
     setTracking(false);
     setShowConfirmFinish(false);
@@ -768,6 +993,7 @@ export default function RunLoggerModal({
 
     const saved = {
       type: "gps",
+      runSessionId: runSessionIdRef.current,
       activityId: activity.id,
       playerId: selectedPlayer.id,
       title: activity.title,
@@ -797,7 +1023,15 @@ export default function RunLoggerModal({
     }
   }
 
-  function discardGpsRun() {
+  async function discardGpsRun() {
+    await logGpsEvent("run_discarded", {
+      details: {
+        elapsed_seconds: elapsed,
+        final_distance_km: distanceKm,
+        reconnect_count: reconnectCountRef.current,
+      },
+    });
+
     stopTracking();
     setTracking(false);
     setPaused(false);
@@ -832,6 +1066,7 @@ export default function RunLoggerModal({
 
     const saved = {
       type: "manual",
+      runSessionId: crypto.randomUUID(),
       activityId: activity.id,
       playerId: selectedPlayer.id,
       title: activity.title,
