@@ -15,6 +15,55 @@ function olderSquadUsesGps(squadKey = "") {
   return squadKey === "2014-boys" || squadKey === "2015-girls";
 }
 
+function normaliseRunType(run = {}) {
+  const values = [
+    run?.type,
+    run?.runType,
+    run?.run_type,
+    run?.source,
+    run?.runSource,
+    run?.run_source,
+  ]
+    .filter(Boolean)
+    .map(value => String(value).trim().toLowerCase());
+
+  if (
+    run?.file_type ||
+    run?.fileType ||
+    run?.original_filename ||
+    run?.originalFilename ||
+    values.some(value => ["file_upload", "upload", "uploaded", "import", "imported", "gpx", "tcx"].includes(value))
+  ) {
+    return "file_upload";
+  }
+
+  if (values.includes("gps")) return "gps";
+  return "manual";
+}
+
+function normaliseSavedRun(run = {}) {
+  const persistedRunType = String(run?.persisted_run_type || run?.run_type || run?.run_source || "").toLowerCase() || null;
+  const runType = normaliseRunType(run);
+
+  return {
+    ...run,
+    type: runType,
+    source: runType,
+    runType,
+    runSource: runType,
+    run_type: runType,
+    run_source: runType,
+    persisted_run_type: persistedRunType,
+  };
+}
+
+function savedRunLabel(run) {
+  const runType = normaliseRunType(run);
+  if (runType === "file_upload") return "Uploaded Run";
+  if (runType === "gps") return "GPS Run";
+  return "Manual Run";
+}
+
 function isRunActivity(activity) {
   return (
     activity.gps_preferred ||
@@ -368,19 +417,66 @@ export default function ChallengeHome({
     if (!activity) return null;
 
     const exactTaskMatch = savedRuns.find(
-      run => String(run.task_key || "") === String(activity.id || "")
+      run => String(run.task_key || run.activity_id || "") === String(activity.id || "")
     );
 
-    if (exactTaskMatch) return exactTaskMatch;
+    if (exactTaskMatch) return normaliseSavedRun(exactTaskMatch);
 
-    return savedRuns.find(run => {
+    const activityTitle = String(activity.title || "").toLowerCase().trim();
+    const activityRunOrder = runOrder(activity);
+
+    const titleMatch = savedRuns.find(run => {
       const sameWeek = Number(run.week || safeWeek) === Number(safeWeek);
       const sameTitle =
-        String(run.label || "").toLowerCase().trim() ===
-        String(activity.title || "").toLowerCase().trim();
+        String(run.label || run.title || "").toLowerCase().trim() === activityTitle;
 
       return sameWeek && sameTitle;
     });
+
+    if (titleMatch) return normaliseSavedRun(titleMatch);
+
+    const orderedRunMatch = savedRuns.find(run => {
+      const sameWeek = Number(run.week || safeWeek) === Number(safeWeek);
+      const savedOrder = runOrder({
+        title: run.label || run.title,
+        run_number: run.run_number,
+        run_order: run.run_order,
+        sort_order: run.sort_order,
+      });
+
+      return sameWeek && activityRunOrder < 999 && savedOrder === activityRunOrder;
+    });
+
+    return orderedRunMatch ? normaliseSavedRun(orderedRunMatch) : null;
+  }
+
+  function viewableRunForActivity(activity) {
+    const proof = runForActivity(activity);
+    if (proof) return proof;
+
+    const completion = completionFor(activity?.id, completions);
+    const completionType = String(
+      completion?.completion_type || completion?.type || ""
+    ).toLowerCase();
+
+    if (completion?.status === "completed" && ["gps", "file_upload"].includes(completionType)) {
+      return normaliseSavedRun({
+        ...completion,
+        id: completion.run_proof_id || completion.proof_id || completion.id,
+        player_id: completion.player_id || selectedPlayer?.id,
+        task_key: activity.id,
+        activity_id: activity.id,
+        label: activity.title,
+        title: activity.title,
+        week: safeWeek,
+        run_type: completionType,
+        run_source: completionType,
+        saved_at: completion.completed_at || completion.updated_at || completion.created_at,
+        completion_only: true,
+      });
+    }
+
+    return null;
   }
 
   function markRecoveryVideoStarted(activityId) {
@@ -482,6 +578,7 @@ export default function ChallengeHome({
 
   const currentWeekRuns = savedRuns
     .filter(run => Number(run.week || 1) === safeWeek)
+    .map(normaliseSavedRun)
     .sort((a, b) => {
       const aOrder = runOrder({
         title: a.label,
@@ -747,7 +844,7 @@ export default function ChallengeHome({
 
         <div className="fitness-pill-grid">
           {fitnessItems.map(item => {
-            const savedRun = runForActivity(item);
+            const savedRun = viewableRunForActivity(item);
             const completion = completionFor(item.id, completions);
             const done = Boolean(completion) || Boolean(savedRun);
             const run = isRunActivity(item);
@@ -765,12 +862,27 @@ export default function ChallengeHome({
                   }
 
                   if (savedRun) {
-                    if (isCoachMode && typeof onCoachRemoveRun === "function") {
+                    if (
+                      isCoachMode &&
+                      !savedRun.completion_only &&
+                      typeof onCoachRemoveRun === "function"
+                    ) {
                       onCoachRemoveRun(savedRun);
                       return;
                     }
 
                     setSelectedRunProof(savedRun);
+                    return;
+                  }
+
+                  // A completed run must never start again just because its
+                  // matching run_proofs row is missing or failed to load.
+                  if (completion?.status === "completed" && run) {
+                    showToast(
+                      completion?.gps_verified
+                        ? "This GPS run is already complete. Its saved route details are unavailable."
+                        : "This run is already complete. Its saved details are unavailable."
+                    );
                     return;
                   }
 
@@ -801,7 +913,7 @@ export default function ChallengeHome({
 
                 <small>
                   {savedRun
-                    ? "View Run"
+                    ? `View ${savedRunLabel(savedRun)}`
                     : useGps
                       ? "Open GPS"
                       : done

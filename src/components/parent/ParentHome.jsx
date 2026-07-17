@@ -18,6 +18,62 @@ function getPlayerInitials(name = "") {
     .toUpperCase();
 }
 
+function normaliseRunType(run = {}, fallback = "manual") {
+  const candidates = [
+    run?.type,
+    run?.runType,
+    run?.run_type,
+    run?.source,
+    run?.runSource,
+    run?.run_source,
+    run?.completionType,
+    run?.completion_type,
+    run?.activityType,
+    run?.importSource,
+  ]
+    .filter(Boolean)
+    .map(value => String(value).trim().toLowerCase());
+
+  const hasUploadMetadata = Boolean(
+    run?.fileType ||
+    run?.file_type ||
+    run?.originalFilename ||
+    run?.original_filename ||
+    run?.importedAt ||
+    run?.imported_at
+  );
+
+  if (
+    hasUploadMetadata ||
+    candidates.some(value =>
+      ["file_upload", "upload", "uploaded", "import", "imported", "gpx", "tcx"].includes(value)
+    )
+  ) {
+    return "file_upload";
+  }
+
+  if (candidates.includes("gps")) return "gps";
+  if (candidates.includes("manual")) return "manual";
+
+  return fallback;
+}
+
+function normaliseSavedRun(run = {}) {
+  const persistedRunType = String(run?.run_type || run?.run_source || "").toLowerCase() || null;
+  const runType = normaliseRunType(run, persistedRunType || "manual");
+
+  return {
+    ...run,
+    type: runType,
+    source: runType,
+    runType,
+    runSource: runType,
+    run_type: runType,
+    run_source: runType,
+    persisted_run_type: persistedRunType,
+  };
+}
+
 function xpForActivity(activity, completionType = "activity") {
   const title = String(activity?.title || "").toLowerCase();
   const isRun =
@@ -224,7 +280,7 @@ export default function ParentHome({
       selectedPlayer?.id === playerId
         ? selectedPlayer
         : localPlayers.find(player => player.id === playerId) ||
-          allLinkedPlayers.find(player => player.id === playerId);
+        allLinkedPlayers.find(player => player.id === playerId);
 
     await Promise.all([
       loadSavedRuns(playerId),
@@ -240,7 +296,6 @@ export default function ParentHome({
       .from("run_proofs")
       .select("*")
       .eq("player_id", playerId)
-      .eq("squad_key", selectedPlayer?.squad_key || squadConfig.key)
       .order("saved_at", { ascending: false });
 
     if (error) {
@@ -249,7 +304,7 @@ export default function ParentHome({
       return;
     }
 
-    setSavedRuns(data || []);
+    setSavedRuns((data || []).map(normaliseSavedRun));
   }
 
   async function loadCompletions(playerId) {
@@ -340,10 +395,10 @@ export default function ParentHome({
     setSquadRank(
       index >= 0
         ? {
-            position: index + 1,
-            total: ranked.length,
-            xp: ranked[index].xp,
-          }
+          position: index + 1,
+          total: ranked.length,
+          xp: ranked[index].xp,
+        }
         : null
     );
   }
@@ -493,7 +548,7 @@ export default function ParentHome({
     const player =
       typeof playerOrId === "string"
         ? allLinkedPlayers.find(p => p.id === playerOrId) ||
-          localPlayers.find(p => p.id === playerOrId)
+        localPlayers.find(p => p.id === playerOrId)
         : playerOrId;
 
     if (!player?.id) return;
@@ -630,27 +685,43 @@ export default function ParentHome({
       throw error;
     }
 
-    await removeXpForActivity(playerId, activity.id);
+    try {
+      await removeXpForActivity(playerId, activity.id);
 
-    if (awardPoints) {
-      await awardXp({
-        playerId,
-        activity,
-        completionId: data.id,
-        completionType,
-        reason: activity.title || completionType,
-      });
+      if (awardPoints) {
+        await awardXp({
+          playerId,
+          activity,
+          completionId: data.id,
+          completionType,
+          reason: activity.title || completionType,
+        });
+      }
+    } catch (xpError) {
+      console.error("XP update failed after completion save", xpError);
     }
 
-    await maybeAwardBadges(playerId);
-    await refreshPlayerData(playerId);
+    try {
+      await maybeAwardBadges(playerId);
+    } catch (badgeError) {
+      console.error("Badge refresh failed after completion save", badgeError);
+    }
+
+    try {
+      await refreshPlayerData(playerId);
+    } catch (refreshError) {
+      console.error("Player refresh failed after completion save", refreshError);
+    }
 
     if (
       (status === "completed" || status === "awaiting_approval") &&
-      completionType !== "gps" &&
-      completionType !== "manual"
+      !["gps", "manual", "file_upload"].includes(completionType)
     ) {
-      playActivityComplete();
+      try {
+        playActivityComplete();
+      } catch (soundError) {
+        console.error("Completion sound failed", soundError);
+      }
     }
 
     return data;
@@ -727,6 +798,9 @@ export default function ParentHome({
   }
 
   async function handleRunSaved(result) {
+    const runType = normaliseRunType(result, "manual");
+    const runSource = runType;
+
     const fullActivity =
       (weeks || []).find(activity => activity.id === result.activityId) || {
         id: result.activityId,
@@ -736,40 +810,35 @@ export default function ParentHome({
         target_value: result.targetKm || result.distanceKm || 0,
       };
 
-    const completion = await upsertCompletion({
-      playerId: result.playerId,
-      activity: fullActivity,
-      status: "completed",
-      completionType: result.type,
-      gpsVerified: result.type === "gps",
-      awardPoints: true,
-    });
+    const proofPayload = {
+      squad: squadConfig.shortLabel || squadConfig.label || null,
+      squad_key: selectedPlayer?.squad_key || squadConfig.key,
+      player_id: result.playerId,
+      player_name: selectedPlayer?.name || null,
+      task_key: result.activityId,
+      week: result.week || challengeWeek,
+      label: result.title,
+      target: result.targetKm ? `${result.targetKm} km` : null,
+      run_type: runType,
+      run_source: runSource,
+      distance_km: result.distanceKm,
+      duration_min: result.durationMin,
+      pace_min_per_km:
+        result.distanceKm > 0 && result.durationMin
+          ? Number((result.durationMin / result.distanceKm).toFixed(2))
+          : null,
+      note:
+        runType === "gps"
+          ? "Verified GPS run"
+          : runType === "file_upload"
+            ? `Imported ${String(result.fileType || "activity").toUpperCase()} activity`
+            : "Manual run entry",
+      saved_at: result.savedAt || new Date().toISOString(),
+    };
 
     const { data: proof, error: proofError } = await supabase
       .from("run_proofs")
-      .insert({
-        squad: squadConfig.shortLabel || squadConfig.label || null,
-        squad_key: selectedPlayer?.squad_key || squadConfig.key,
-        player_id: result.playerId,
-        player_name: selectedPlayer.name,
-        task_key: result.activityId,
-        week: challengeWeek,
-        label: result.title,
-        target: result.targetKm ? `${result.targetKm} km` : null,
-        run_type: result.type,
-        distance_km: result.distanceKm,
-        duration_min: result.durationMin,
-        pace_min_per_km:
-          result.distanceKm > 0 && result.durationMin
-            ? Number((result.durationMin / result.distanceKm).toFixed(2))
-            : null,
-        note: result.type === "gps" ? "Verified GPS run" : "Manual run entry",
-        route_points: result.type === "gps" ? result.routePoints || [] : null,
-        saved_at: result.savedAt,
-        updated_at: new Date().toISOString(),
-        has_screenshot: result.type === "gps" && Array.isArray(result.routePoints) && result.routePoints.length > 0,
-        share_image_url: null,
-      })
+      .insert(proofPayload)
       .select()
       .single();
 
@@ -777,26 +846,81 @@ export default function ParentHome({
       throw proofError;
     }
 
-    await logMigrationAudit(result.type === "gps" ? "gps_run_saved" : "manual_run_saved", selectedPlayer, {
-      activity_id: result.activityId,
-      activity_title: result.title,
-      distance_km: result.distanceKm,
-      duration_min: result.durationMin || null,
-      run_proof_id: proof?.id || null,
-    });
+    let completion;
 
-    await maybeAwardBadges(result.playerId);
-    await refreshPlayerData(result.playerId);
+    try {
+      completion = await upsertCompletion({
+        playerId: result.playerId,
+        activity: fullActivity,
+        status: "completed",
+        completionType: runType,
+        gpsVerified: runType === "gps",
+        awardPoints: true,
+      });
+    } catch (completionError) {
+      const { error: cleanupError } = await supabase
+        .from("run_proofs")
+        .delete()
+        .eq("id", proof.id);
+
+      if (cleanupError) {
+        console.error("Could not roll back run proof after completion failure", cleanupError);
+      }
+
+      throw completionError;
+    }
+
+    const savedProof = normaliseSavedRun(proof);
+
+    setSavedRuns(previous => [
+      savedProof,
+      ...previous.filter(item => item.id !== savedProof.id),
+    ]);
+
+    setCompletions(previous => [
+      completion,
+      ...previous.filter(item => item.id !== completion.id),
+    ]);
+
+    const auditEvent =
+      runType === "gps"
+        ? "gps_run_saved"
+        : runType === "file_upload"
+          ? "uploaded_run_saved"
+          : "manual_run_saved";
+
+    try {
+      await logMigrationAudit(auditEvent, selectedPlayer, {
+        activity_id: result.activityId,
+        activity_title: result.title,
+        distance_km: result.distanceKm,
+        duration_min: result.durationMin || null,
+        run_type: runType,
+        run_source: runSource,
+        file_type: result.fileType || null,
+        original_filename: result.originalFilename || null,
+        run_proof_id: proof?.id || null,
+      });
+    } catch (auditError) {
+      console.error("Run audit failed after successful save", auditError);
+    }
+
+    Promise.resolve(refreshPlayerData(result.playerId)).catch(refreshError => {
+      console.error("Run refresh failed after successful save", refreshError);
+    });
 
     return {
       ...completion,
       runProofId: proof?.id,
-      proof,
+      proof: savedProof,
     };
   }
 
-  async function deleteManualRun(run = {}) {
-    const flowId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  async function deleteRun(run = {}) {
+    const flowId =
+      `${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`;
 
     const playerId =
       run?.playerId ||
@@ -808,163 +932,360 @@ export default function ParentHome({
       run?.activityId ||
       run?.activity_id ||
       run?.task_key ||
-      run?.activity?.id ||
-      run?.id;
+      run?.activity?.id;
 
     const proofId =
       run?.runProofId ||
       run?.proofId ||
       run?.proof?.id ||
-      (run?.task_key || run?.run_type ? run?.id : null);
+      (
+        run?.task_key ||
+          run?.run_type
+          ? run?.id
+          : null
+      );
 
-    console.groupCollapsed("[manual-run-delete]", flowId);
-    console.log("handler fired", {
-      run,
-      proofId,
-      playerId,
-      activityId,
-      selectedPlayerId: selectedPlayer?.id,
-    });
+    const runType = normaliseRunType(run, "manual");
+    const persistedRunType = String(
+      run?.persisted_run_type ||
+      run?.run_type ||
+      run?.run_source ||
+      runType
+    ).toLowerCase();
 
-    if (!playerId || !activityId) {
-      console.error("Missing playerId or activityId", {
+    const removableTypes = [
+      "manual",
+      "file_upload",
+    ];
+
+    if (
+      !removableTypes.includes(
+        runType
+      )
+    ) {
+      alert(
+        "Only manual and uploaded runs can be removed."
+      );
+
+      return;
+    }
+
+    const runLabel =
+      runType === "file_upload"
+        ? "uploaded run"
+        : "manual run";
+
+    console.groupCollapsed(
+      "[run-delete]",
+      flowId
+    );
+
+    console.log(
+      "handler fired",
+      {
+        run,
         proofId,
         playerId,
         activityId,
-        run,
-      });
-      console.groupEnd();
-      alert("Could not identify the manual run to remove.");
-      return;
-    }
-
-    const ok = window.confirm("Remove this manual run and uncheck the activity?");
-
-    if (!ok) {
-      console.log("cancelled by user");
-      console.groupEnd();
-      return;
-    }
-
-    const previousSavedRuns = savedRuns;
-    const previousCompletions = completions;
-    const previousXpTransactions = xpTransactions;
-    const previousXpTotal = xpTotal;
-
-    const matchesManualRun = item => {
-      if (proofId && item.id === proofId) return true;
-
-      return (
-        item.player_id === playerId &&
-        item.task_key === activityId &&
-        item.run_type === "manual"
-      );
-    };
-
-    const matchesCompletion = item =>
-      item.player_id === playerId &&
-      item.activity_id === activityId &&
-      item.gps_verified !== true;
-
-    setSavedRuns(current => current.filter(item => !matchesManualRun(item)));
-    setCompletions(current => current.filter(item => !matchesCompletion(item)));
-    setXpTransactions(current =>
-      current.filter(item => !(item.player_id === playerId && item.activity_id === activityId))
+        runType,
+        selectedPlayerId:
+          selectedPlayer?.id,
+      }
     );
-    setXpTotal(currentTotal => {
-      const removedXp = previousXpTransactions
-        .filter(item => item.player_id === playerId && item.activity_id === activityId)
-        .reduce((total, item) => total + Number(item.xp || 0), 0);
 
-      return Math.max(0, Number(currentTotal || 0) - removedXp);
+    if (
+      !playerId ||
+      !activityId
+    ) {
+      console.error(
+        "Missing playerId or activityId",
+        {
+          proofId,
+          playerId,
+          activityId,
+          runType,
+          run,
+        }
+      );
+
+      console.groupEnd();
+
+      alert(
+        `Could not identify the ${runLabel} to remove.`
+      );
+
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Remove this ${runLabel} and uncheck the activity?`
+      );
+
+    if (!confirmed) {
+      console.log(
+        "cancelled by user"
+      );
+
+      console.groupEnd();
+      return;
+    }
+
+    const previousSavedRuns =
+      savedRuns;
+
+    const previousCompletions =
+      completions;
+
+    const previousXpTransactions =
+      xpTransactions;
+
+    const previousXpTotal =
+      xpTotal;
+
+    const matchesRun =
+      item => {
+        if (
+          proofId &&
+          item.id === proofId
+        ) {
+          return true;
+        }
+
+        return (
+          String(item.player_id || "") === String(playerId || "") &&
+          String(item.task_key || "") === String(activityId || "")
+        );
+      };
+
+    const matchesCompletion =
+      item =>
+        String(item.player_id || "") === String(playerId || "") &&
+        String(item.activity_id || "") === String(activityId || "");
+
+    setSavedRuns(current =>
+      current.filter(
+        item => !matchesRun(item)
+      )
+    );
+
+    setCompletions(current =>
+      current.filter(
+        item =>
+          !matchesCompletion(item)
+      )
+    );
+
+    setXpTransactions(current =>
+      current.filter(
+        item =>
+          !(
+            item.player_id ===
+            playerId &&
+            item.activity_id ===
+            activityId
+          )
+      )
+    );
+
+    setXpTotal(currentTotal => {
+      const removedXp =
+        previousXpTransactions
+          .filter(
+            item =>
+              item.player_id ===
+              playerId &&
+              item.activity_id ===
+              activityId
+          )
+          .reduce(
+            (total, item) =>
+              total +
+              Number(item.xp || 0),
+            0
+          );
+
+      return Math.max(
+        0,
+        Number(
+          currentTotal || 0
+        ) - removedXp
+      );
     });
 
     try {
       let deletedProofs = [];
-      let proofError = null;
 
       if (proofId) {
-        const response = await supabase
+        const {
+          data,
+          error,
+        } = await supabase
           .from("run_proofs")
           .delete()
           .eq("id", proofId)
-          .eq("run_type", "manual")
-          .select("id,player_id,task_key,run_type");
+          .eq(
+            "player_id",
+            playerId
+          )
+          .select(
+            "id,player_id,task_key,run_type"
+          );
 
-        deletedProofs = response.data || [];
-        proofError = response.error;
+        if (error) {
+          throw error;
+        }
+
+        deletedProofs =
+          data || [];
       }
 
-      if (proofError) throw proofError;
-
-      if (!deletedProofs.length) {
-        const response = await supabase
+      if (
+        !deletedProofs.length
+      ) {
+        const {
+          data,
+          error,
+        } = await supabase
           .from("run_proofs")
           .delete()
-          .eq("player_id", playerId)
-          .eq("task_key", activityId)
-          .eq("run_type", "manual")
-          .select("id,player_id,task_key,run_type");
+          .eq(
+            "player_id",
+            playerId
+          )
+          .eq(
+            "task_key",
+            activityId
+          )
+          .select(
+            "id,player_id,task_key,run_type"
+          );
 
-        deletedProofs = response.data || [];
-        proofError = response.error;
+        if (error) {
+          throw error;
+        }
+
+        deletedProofs =
+          data || [];
       }
 
-      if (proofError) throw proofError;
-
-      console.log("run_proofs deleted", deletedProofs);
-
-      const { data: deletedCompletions, error: completionError } = await supabase
-        .from("activity_completions")
+      const {
+        data:
+        deletedCompletions,
+        error:
+        completionError,
+      } = await supabase
+        .from(
+          "activity_completions"
+        )
         .delete()
-        .eq("player_id", playerId)
-        .eq("activity_id", activityId)
-        .or("completion_type.eq.manual,gps_verified.is.false,gps_verified.is.null")
-        .select("id,player_id,activity_id,completion_type,gps_verified");
+        .eq(
+          "player_id",
+          playerId
+        )
+        .eq(
+          "activity_id",
+          activityId
+        )
+        .select(
+          "id,player_id,activity_id,completion_type,gps_verified"
+        );
 
-      if (completionError) throw completionError;
+      if (completionError) {
+        throw completionError;
+      }
 
-      console.log("activity_completions deleted", deletedCompletions);
-
-      const { data: deletedXp, error: xpError } = await supabase
+      const {
+        data: deletedXp,
+        error: xpError,
+      } = await supabase
         .from("xp_transactions")
         .delete()
-        .eq("player_id", playerId)
-        .eq("activity_id", activityId)
-        .select("id,player_id,activity_id,xp,source");
+        .eq(
+          "player_id",
+          playerId
+        )
+        .eq(
+          "activity_id",
+          activityId
+        )
+        .select(
+          "id,player_id,activity_id,xp,source"
+        );
 
-      if (xpError) throw xpError;
-
-      console.log("xp_transactions deleted", deletedXp);
-
-      await refreshPlayerData(playerId);
-
-      await logMigrationAudit("manual_run_removed", selectedPlayer, {
-        activity_id: activityId,
-        run_proof_id: proofId || null,
-        deleted_proofs: deletedProofs.length,
-        deleted_completions: (deletedCompletions || []).length,
-        deleted_xp: (deletedXp || []).length,
-      });
-
-      if (!deletedProofs.length) {
-        console.warn("No run_proofs rows matched the delete query.", {
-          proofId,
-          playerId,
-          activityId,
-        });
+      if (xpError) {
+        throw xpError;
       }
 
-      console.log("refresh complete");
+      await refreshPlayerData(
+        playerId
+      );
+
+      await logMigrationAudit(
+        runType ===
+          "file_upload"
+          ? "uploaded_run_removed"
+          : "manual_run_removed",
+        selectedPlayer,
+        {
+          activity_id:
+            activityId,
+
+          run_proof_id:
+            proofId || null,
+
+          run_type:
+            runType,
+
+          deleted_proofs:
+            deletedProofs.length,
+
+          deleted_completions:
+            (
+              deletedCompletions ||
+              []
+            ).length,
+
+          deleted_xp:
+            (deletedXp || [])
+              .length,
+        }
+      );
+
+      console.log(
+        "run removed",
+        {
+          deletedProofs,
+          deletedCompletions,
+          deletedXp,
+        }
+      );
     } catch (error) {
-      console.error("manual run delete failed", error);
+      console.error(
+        "run delete failed",
+        error
+      );
 
-      setSavedRuns(previousSavedRuns);
-      setCompletions(previousCompletions);
-      setXpTransactions(previousXpTransactions);
-      setXpTotal(previousXpTotal);
+      setSavedRuns(
+        previousSavedRuns
+      );
 
-      alert(error?.message || "Could not remove this manual run.");
+      setCompletions(
+        previousCompletions
+      );
+
+      setXpTransactions(
+        previousXpTransactions
+      );
+
+      setXpTotal(
+        previousXpTotal
+      );
+
+      alert(
+        error?.message ||
+        `Could not remove this ${runLabel}.`
+      );
     } finally {
       console.groupEnd();
     }
@@ -1088,17 +1409,17 @@ export default function ParentHome({
       <>
         <ProgressHome
           squadConfig={squadConfig}
-        selectedPlayer={selectedPlayer}
-        hasMultipleChildren={(allLinkedPlayers.length || localPlayers.length) > 1}
-        onSwitchChild={() => setShowChildSwitcher(true)}
-        activities={weeks || []}
-        completions={completions}
-        savedRuns={savedRuns}
-        xpTotal={xpTotal}
-        xpTransactions={xpTransactions}
-        badges={badges}
-        onOpenWeek={openWeekFromProgress}
-      />
+          selectedPlayer={selectedPlayer}
+          hasMultipleChildren={(allLinkedPlayers.length || localPlayers.length) > 1}
+          onSwitchChild={() => setShowChildSwitcher(true)}
+          activities={weeks || []}
+          completions={completions}
+          savedRuns={savedRuns}
+          xpTotal={xpTotal}
+          xpTransactions={xpTransactions}
+          badges={badges}
+          onOpenWeek={openWeekFromProgress}
+        />
         {renderChildSwitcherModal()}
       </>
     );
@@ -1124,20 +1445,20 @@ export default function ParentHome({
       <>
         <SettingsHome
           supabase={supabase}
-        session={session}
-        squadConfig={squadConfig}
-        selectedPlayer={selectedPlayer}
-        players={allLinkedPlayers.length ? allLinkedPlayers : localPlayers}
-        xpTotal={xpTotal}
-        badges={badges}
-        completions={completions}
-        termsAcceptedAt={termsAcceptedAt}
-        onSwitchChild={() => setShowChildSwitcher(true)}
-        onSelectChild={player => selectPlayer(player, { stayOnPage: true })}
-        onChildLinked={linkChild}
-        onRemoveChild={removeLinkedChild}
-        onSignOut={onSignOut}
-      />
+          session={session}
+          squadConfig={squadConfig}
+          selectedPlayer={selectedPlayer}
+          players={allLinkedPlayers.length ? allLinkedPlayers : localPlayers}
+          xpTotal={xpTotal}
+          badges={badges}
+          completions={completions}
+          termsAcceptedAt={termsAcceptedAt}
+          onSwitchChild={() => setShowChildSwitcher(true)}
+          onSelectChild={player => selectPlayer(player, { stayOnPage: true })}
+          onChildLinked={linkChild}
+          onRemoveChild={removeLinkedChild}
+          onSignOut={onSignOut}
+        />
         {renderChildSwitcherModal()}
       </>
     );
@@ -1158,7 +1479,7 @@ export default function ParentHome({
         </div>
       ) : null}
 
-<ChallengeHome
+      <ChallengeHome
         supabase={supabase}
         squadConfig={squadConfig}
         selectedPlayer={selectedPlayer}
@@ -1173,7 +1494,7 @@ export default function ParentHome({
         xpTotal={xpTotal}
         badges={badges}
         onStartRun={activity => setRunActivity(activity)}
-        onDeleteManualRun={deleteManualRun}
+        onDeleteManualRun={deleteRun}
         onToggleActivity={handleToggleActivity}
         onSubmitApproval={handleSubmitApproval}
       />
@@ -1184,7 +1505,8 @@ export default function ParentHome({
           selectedPlayer={selectedPlayer}
           onClose={() => setRunActivity(null)}
           onSaved={handleRunSaved}
-          onDeleted={deleteManualRun}
+          onDeleted={deleteRun}
+          existingRuns={savedRuns}
         />
       ) : null}
       {renderChildSwitcherModal()}
